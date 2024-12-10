@@ -61,12 +61,11 @@ export default {
     },
     // 打开项目
     openProject(projectId) {
-      alert(`打开项目ID: ${projectId}`)
-      // 这里可以通过路由跳转或其他方式打开项目
+      // 跳转到文档管理页面，并传递项目ID
+      this.$router.push({ name: 'DocumentManagement', params: { projectId } })
     },
     // 创建新项目
     handleCreateProject() {
-      //alert('创建新项目')
       // 跳转到创建项目页面
       this.$router.push('/create-project')
     },
@@ -75,6 +74,7 @@ export default {
 </script>
 
 <style scoped>
+/* 保持不变，或根据需要进行调整 */
 .project-management {
   padding: 20px;
   background-color: #f9f9f9;
@@ -84,7 +84,7 @@ export default {
 
 .create-project-button {
   padding: 10px 20px;
-  font-size: 16px;
+  font-size: 14px;
   background-color: #28a745;
   color: white;
   border: none;
@@ -100,18 +100,25 @@ export default {
 .project-list {
   margin-top: 20px;
 }
-
 .project-item {
   background-color: white;
   padding: 15px;
   margin-bottom: 10px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .project-info h3 {
   font-size: 18px;
   font-weight: bold;
+  margin: 0 0 5px 0;
+}
+.project-info p {
+  margin: 2px 0;
+  font-size: 14px;
 }
 
 .project-actions .open-project-button {
