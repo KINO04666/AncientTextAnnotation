@@ -5,6 +5,7 @@ import Layout_Top from '@/components/Layout_Top.vue'
 import CreateProject from '@/components/CreateProject.vue'
 import DocumentManagement from '@/components/DocumentManagement.vue'
 import CreateDocument from '@/components/CreateDocument.vue'
+import Annotation from '@/components/Annotation.vue'
 // import CreateDocument from '@/components/CreateDocument.vue' // 如果有创建文档页面
 
 const router = createRouter({
@@ -41,6 +42,11 @@ const router = createRouter({
           component: CreateDocument,
         },
       ],
+    },
+    {
+      path: '/annotation',
+      name: 'Annotation',
+      component: Annotation,
     },
   ],
 })
