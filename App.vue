@@ -1,100 +1,24 @@
-<script setup>
-import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
-</script>
-
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="@/assets/zjgs.png" width="125" height="125" />
-
-    <div class="wrapper">
-      <HelloWorld msg="浙江工商大学" />
-      <HelloWorld msg2="古籍标注平台" />
-      <nav>
-        <div>
-        <RouterLink to="/">login</RouterLink>
-        <RouterLink to="/register">register</RouterLink>
-        </div>
-      </nav>
-    </div>
-  </header>
-
-  <RouterView />
+  <div id="app">
+    <router-view> </router-view>
+    <!-- 这里将根据路由动态渲染页面组件 -->
+  </div>
 </template>
 
-<style scoped>
-header {
-  line-height: 1.5;
-  max-height: 100vh;
+<script>
+export default {
+  name: 'App',
 }
+</script>
 
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
-}
-
-.logo {
-  position: relative;
-  left: 315px; /* 向右移动20px */
-  top:-60px;
-}
-
-
-nav {
+<style>
+.background {
   width: 100%;
-  font-size: 12px;
-  text-align: center;
-  margin-top: 2rem;
-  margin-left: 100px;
-}
-
-nav a.router-link-exact-active {
-  color: var(--color-text);
-}
-
-nav a.router-link-exact-active:hover {
-  background-color: transparent;
-}
-
-nav a {
-  display: inline-block;
-  padding: 0 1rem;
-  border-left: 1px solid var(--color-border);
-}
-
-nav a:first-of-type {
-  border: 0;
-}
-
-nav div {
-  margin-left: 160px;
-  margin-bottom: 10px;/* 推动导航项到右侧 */
-}
-
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  nav {
-    text-align: left;
-    margin-left: -1rem;
-    font-size: 1rem;
-
-    padding: 1rem 0;
-    margin-top: 1rem;
-  }
+  height: 100vh;
+  background: url('@/assets/background.png') no-repeat center center fixed;
+  background-size: cover;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 </style>

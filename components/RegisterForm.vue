@@ -1,103 +1,87 @@
 <template>
   <div class="register-container">
-    <h2>注册</h2>
-    <form @submit.prevent="handleSubmit">
-      <div class="input-group">
-        <label for="username">用户名</label>
-        <input
-          type="text"
-          id="username"
-          v-model="username"
-          placeholder="请输入用户名"
-        />
+      <div class="register-box">
+        <h2>注册</h2>
+        <form @submit.prevent="handleSubmit">
+          <div class="input-group">
+            <label for="username">用户名</label>
+            <input type="text" id="username" v-model="username" placeholder="请输入用户名" />
+          </div>
+          <div class="input-group">
+            <label for="email">邮箱</label>
+            <input type="email" id="email" v-model="email" placeholder="请输入邮箱" />
+          </div>
+          <div class="input-group">
+            <label for="password">密码</label>
+            <input type="password" id="password" v-model="password" placeholder="请输入密码" />
+          </div>
+          <div class="input-group">
+            <label for="confirmPassword">确认密码</label>
+            <input
+              type="password"
+              id="confirmPassword"
+              v-model="confirmPassword"
+              placeholder="请确认密码"
+            />
+          </div>
+          <button type="submit">注册</button>
+        </form>
+
+        <!-- 登录页面链接 -->
+        <p class="login-link">已有账号？<router-link to="/">点击这里登录</router-link></p>
       </div>
-      <div class="input-group">
-        <label for="email">邮箱</label>
-        <input
-          type="email"
-          id="email"
-          v-model="email"
-          placeholder="请输入邮箱"
-        />
-      </div>
-      <div class="input-group">
-        <label for="password">密码</label>
-        <input
-          type="password"
-          id="password"
-          v-model="password"
-          placeholder="请输入密码"
-        />
-      </div>
-      <div class="input-group">
-        <label for="confirmPassword">确认密码</label>
-        <input
-          type="password"
-          id="confirmPassword"
-          v-model="confirmPassword"
-          placeholder="请确认密码"
-        />
-      </div>
-      <button type="submit">注册</button>
-    </form>
-  </div>
+    </div>
 </template>
 
-<script>
-import { register } from '@/utils/axios';  // 导入 register 请求函数
 
-export default {
-  data() {
-    return {
-      username: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-    };
-  },
-  methods: {
-    async handleSubmit() {
-      if (this.password !== this.confirmPassword) {
-        alert("密码和确认密码不一致");
+<script lang="ts">
+import { defineComponent, ref } from 'vue';
+
+export default defineComponent({
+  name: 'RegisterForm',
+  setup() {
+    // 定义表单数据
+    const username = ref('');
+    const email = ref('');
+    const password = ref('');
+    const confirmPassword = ref('');
+
+    // 处理表单提交
+    const handleSubmit = () => {
+      if (password.value !== confirmPassword.value) {
+        alert('密码和确认密码不一致');
         return;
       }
+      // 进行其他注册逻辑
+      console.log('注册信息', { username: username.value, email: email.value, password: password.value });
+      // 比如可以发出请求到后端进行注册
+    };
 
-      // 准备请求数据
-      const userData = {
-        username: this.username,
-        email: this.email,
-        password: this.password,
-      };
-
-      try {
-        // 调用 register 请求
-        const response = await register(userData);
-        console.log('注册成功:', response.data);
-
-        // 注册成功后的逻辑
-        alert('注册成功！');
-        this.$router.push('/login');  // 假设你希望注册成功后跳转到登录页面
-      } catch (error) {
-        console.error('注册失败:', error);
-        alert('注册失败，请检查信息并重试');
-      }
-    },
-  },
-};
+    return {
+      username,
+      email,
+      password,
+      confirmPassword,
+      handleSubmit
+    };
+  }
+});
 </script>
 
 <style scoped>
-.register-container {
+/* 注册框样式 */
+.register-box {
   width: 300px;
-  margin: 50px auto;
   padding: 20px;
-  border: 1px solid #ccc;
+  margin-left: 400px;
+  background: rgba(255, 255, 255, 0.9); /* 半透明背景 */
   border-radius: 8px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 h2 {
   text-align: center;
+  margin-bottom: 20px;
 }
 
 .input-group {
@@ -120,6 +104,7 @@ button {
   border: none;
   border-radius: 4px;
   font-size: 16px;
+  cursor: pointer;
 }
 
 button:hover {
