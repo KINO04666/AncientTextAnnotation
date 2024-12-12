@@ -6,14 +6,16 @@
     </header>
 
     <div class="project-list">
-      <div v-for="project in projects" :key="project.id" class="project-item">
+      <div v-for="project in projects" :key="project.project_id" class="project-item">
         <div class="project-info">
-          <h3>{{ project.name }}</h3>
-          <p>创建日期: {{ formatDate(project.createdAt) }}</p>
-          <p>项目详情: {{ project.details }}</p>
+          <h3>{{ project.project_name }}</h3>
+          <p>创建日期: {{ formatDate(project.project_create) }}</p>
+          <p>项目详情: {{ project.project_descirbe }}</p>
         </div>
         <div class="project-actions">
-          <button @click="openProject(project.id)" class="open-project-button">打开项目</button>
+          <button @click="openProject(project.project_id)" class="open-project-button">
+            打开项目
+          </button>
         </div>
       </div>
     </div>
@@ -31,29 +33,41 @@ export default {
     this.fetchProjects()
   },
   methods: {
-    // 模拟获取项目数据
+    // 获取项目数据
     fetchProjects() {
-      // 假设这是从后端获取到的项目数据
+      // 示例静态数据，后续可替换为从数据库获取的数据
+
       this.projects = [
         {
-          id: 1,
-          name: '项目A',
-          createdAt: '2024-01-01',
-          details: '这是一个项目A的描述',
+          project_id: '1',
+          project_name: '项目A',
+          project_create: '2024-01-01',
+          project_descirbe: '这是一个项目A的描述',
         },
         {
-          id: 2,
-          name: '项目B',
-          createdAt: '2024-02-15',
-          details: '这是一个项目B的描述',
+          project_id: '2',
+          project_name: '项目B',
+          project_create: '2024-02-15',
+          project_descirbe: '这是一个项目B的描述',
         },
         {
-          id: 3,
-          name: '项目C',
-          createdAt: '2024-03-20',
-          details: '这是一个项目C的描述',
+          project_id: '3',
+          project_name: '项目C',
+          project_create: '2024-03-20',
+          project_descirbe: '这是一个项目C的描述',
         },
       ]
+
+      // 使用 Axios 从后端 API 获取项目数据
+      /*
+      axios.get('/api/projects')
+        .then(response => {
+          this.projects = response.data
+        })
+        .catch(error => {
+          console.error('获取项目数据失败:', error)
+        })
+      */
     },
     // 格式化日期
     formatDate(date) {
@@ -96,7 +110,6 @@ export default {
 .create-project-button:hover {
   background-color: #218838;
 }
-
 .project-list {
   margin-top: 20px;
 }

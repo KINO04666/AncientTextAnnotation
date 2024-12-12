@@ -55,12 +55,16 @@ export default {
         return
       }
 
-      // 发送数据到后端
+      // 发送数据到后端创建文档
       try {
-        const response = await axios.post('/api/documents', {
-          name: this.documentName,
-          description: this.documentDescription,
-        })
+        const response = await axios.post(
+          `http://127.0.0.1:5000/projects/${this.projectId}/documents`,
+          {
+            name: this.documentName,
+            description: this.documentDescription,
+            project_id: this.projectId,
+          },
+        )
 
         // 如果创建成功，跳转回文档管理页面
         if (response.status === 201) {

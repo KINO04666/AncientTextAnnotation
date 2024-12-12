@@ -36,9 +36,17 @@
 </template>
 
 <script>
+import axios from 'axios'
+import mammoth from 'mammoth'
+
 export default {
   props: {
     projectId: {
+      type: Number,
+      required: true,
+    },
+    userId: {
+      // 添加 userId 作为 prop，确保每个文档关联到用户
       type: Number,
       required: true,
     },
@@ -52,30 +60,48 @@ export default {
     this.fetchDocuments()
   },
   methods: {
-    // 模拟获取文档数据
+    // 获取文档数据
     fetchDocuments() {
-      // 假设这是从后端获取到的文档数据，根据 projectId 过滤
-      this.documents = [
-        {
-          doc_id: 1,
-          user_id: 101,
-          project_id: this.projectId,
-          doc_name: '文档1',
-          doc_content: '这是文档1的内容',
-          doc_descirbe: '文档1的描述',
-          doc_create: '2024-04-01',
-        },
-        {
-          doc_id: 2,
-          user_id: 101,
-          project_id: this.projectId,
-          doc_name: '文档2',
-          doc_content: '这是文档2的内容',
-          doc_descirbe: '文档2的描述',
-          doc_create: '2024-05-15',
-        },
-        // 更多文档...
-      ]
+      //   this.documents = [
+      //     {
+      //       doc_id: 1,
+      //       user_id: 101,
+      //       project_id: this.projectId,
+      //       doc_name: '文档1',
+      //       doc_content: '这是文档1的内容',
+      //       doc_descirbe: '文档1的描述',
+      //       doc_create: '2024-04-01',
+      //     },
+      //     {
+      //       doc_id: 2,
+      //       user_id: 101,
+      //       project_id: this.projectId,
+      //       doc_name: '文档2',
+      //       doc_content: '这是文档2的内容',
+      //       doc_descirbe: '文档2的描述',
+      //       doc_create: '2024-05-15',
+      //     },
+      //   ]
+      // 使用 Axios 从后端 API 获取文档数据，根据 projectId 过滤
+      axios
+        .get(`http://127.0.0.1:5000/projects/${this.projectId}/documents`)
+        .then((response) => {
+          this.documents = response.data
+        })
+        .catch((error) => {
+          console.error('获取文档数据失败:', error)
+        })
+
+      // 如果使用代理，则可以简化为：
+      /*
+      axios.get(`/api/projects/${this.projectId}/documents`)
+        .then(response => {
+          this.documents = response.data
+        })
+        .catch(error => {
+          console.error('获取文档数据失败:', error)
+        })
+      */
     },
     // 格式化日期
     formatDate(date) {
@@ -117,42 +143,95 @@ export default {
       this.$refs.fileInput.click()
     },
     // 导入文件
-    importFiles(event) {
+    async importFiles(event) {
       const files = event.target.files
       if (files.length === 0) return
 
       for (let file of files) {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const content = e.target.result
-          // 根据文件类型处理不同格式
+        try {
+          let content = ''
+
+          if (file.type === 'text/plain') {
+            content = await this.readFileAsText(file)
+          } else if (
+            file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          ) {
+            content = await this.convertDocxToText(file)
+          } else if (
+            file.type === 'application/pdf' ||
+            file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          ) {
+            // 处理其他文件类型，如果需要，可以实现相应的解析
+            content = `不支持的文件类型: ${file.type}`
+          } else {
+            content = `未知的文件类型: ${file.type}`
+          }
+
+          // 限制 doc_content 为 255 个字符，如果需要更长，确保数据库字段支持
+          const truncatedContent = content
+
           const docName = file.name
           const docDesc = `导入的文件: ${file.name}`
-          // 模拟将文件内容添加到文档列表
-          this.documents.push({
-            doc_id: this.documents.length + 1,
-            user_id: 101, // 假设用户ID为101
+
+          // 创建文档对象
+          const newDocument = {
             project_id: this.projectId,
-            doc_name: docName,
-            doc_content: content,
-            doc_descirbe: docDesc,
-            doc_create: new Date().toISOString().split('T')[0],
-          })
-        }
-        if (file.type === 'text/plain') {
-          reader.readAsText(file)
-        } else if (
-          file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        ) {
-          reader.readAsBinaryString(file) // 对于docx等格式，可能需要更复杂的解析
-        } else {
-          // 其他文件类型处理
-          reader.readAsDataURL(file)
+            name: docName,
+            content: truncatedContent,
+            descirbe: docDesc,
+          }
+
+          // 发送 POST 请求到后端 API 以保存文档
+          await axios
+            .post(`http://127.0.0.1:5000/projects/${this.projectId}/documents`, newDocument)
+            .then((response) => {
+              // 假设后端返回新创建的文档数据
+              this.documents.push(response.data)
+            })
+            .catch((error) => {
+              console.error(`导入文档 "${docName}" 失败:`, error)
+            })
+        } catch (error) {
+          console.error(`处理文件 "${file.name}" 时出错:`, error)
         }
       }
 
       // 清空文件输入
       event.target.value = ''
+    },
+    // 读取文件为文本
+    readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          resolve(e.target.result)
+        }
+        reader.onerror = (e) => {
+          reject(e)
+        }
+        reader.readAsText(file)
+      })
+    },
+    // 将 .docx 文件转换为文本
+    convertDocxToText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const arrayBuffer = e.target.result
+          mammoth
+            .extractRawText({ arrayBuffer: arrayBuffer })
+            .then((result) => {
+              resolve(result.value)
+            })
+            .catch((err) => {
+              reject(err)
+            })
+        }
+        reader.onerror = (e) => {
+          reject(e)
+        }
+        reader.readAsArrayBuffer(file)
+      })
     },
     // 处理创建文档按钮点击
     handleCreateDocument() {
