@@ -6,9 +6,12 @@ import CreateProject from '@/components/CreateProject.vue'
 import DocumentManagement from '@/components/DocumentManagement.vue'
 import CreateDocument from '@/components/CreateDocument.vue'
 import Annotation from '@/components/Annotation.vue'
+<<<<<<< HEAD
 import LoginForm from '@/components/LoginForm.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
 import FileImport from '@/components/FileImport.vue'
+=======
+>>>>>>> origin/dev
 // import CreateDocument from '@/components/CreateDocument.vue' // 如果有创建文档页面
 
 const router = createRouter({
@@ -66,11 +69,14 @@ const router = createRouter({
       name: 'Annotation',
       component: Annotation,
     },
+<<<<<<< HEAD
     {
       path: '/import',
       name: 'Import',
       component: FileImport,
     },
+=======
+>>>>>>> origin/dev
   ],
 })
 
