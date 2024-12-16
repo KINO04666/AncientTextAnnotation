@@ -5,4 +5,3 @@
     />
   </svg>
 </template>
-S

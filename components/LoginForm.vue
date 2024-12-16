@@ -1,119 +1,166 @@
 <template>
   <div class="login-container">
-      <div class="login-box">
-        <h2>登录</h2>
-        <form @submit.prevent="handleSubmit">
-          <div class="input-group">
-            <label for="username">账号</label>
-            <input type="text" id="username" v-model="username" placeholder="请输入账号" />
-          </div>
-          <div class="input-group">
-            <label for="password">密码</label>
-            <input type="password" id="password" v-model="password" placeholder="请输入密码" />
-          </div>
-          <button type="submit" :disabled="isLoading">
-            {{ isLoading ? '登录中...' : '登录' }}
-          </button>
-        </form>
-        <p v-if="errorMessage" style="color: red; text-align: center">{{ errorMessage }}</p>
+    <div class="login-box">
+      <h2>登录</h2>
+      <!-- 添加浙江工商大学古籍标注的文本 -->
+      <p class="footer-text">浙江工商大学古籍标注</p>
+      <form @submit.prevent="handleLogin">
+        <div class="input-group">
+          <label for="email">邮箱</label>
+          <input type="email" id="email" v-model="email" placeholder="请输入邮箱" />
+        </div>
+        <div class="input-group">
+          <label for="password">密码</label>
+          <input type="password" id="password" v-model="password" placeholder="请输入密码" />
+        </div>
+        <button type="submit" :disabled="isLoading">{{ isLoading ? '登录中...' : '登录' }}</button>
+      </form>
 
-        <!-- 添加跳转到注册页面的按钮 -->
-        <p style="text-align: center;">
-          <router-link to="/register">还没有账号？立即注册</router-link>
-        </p>
-      </div>
+      <!-- 注册页面链接 -->
+      <p class="register-link">还没有账号？<router-link to="/register">点击这里注册</router-link></p>
     </div>
+  </div>
 </template>
 
 <script>
-import axios from 'axios'
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';  // 导入 useRouter
+import axios from 'axios';
 
 export default {
-  data() {
-    return {
-      username: '',
-      password: '',
-      isLoading: false,
-      errorMessage: '',
-    }
-  },
-  methods: {
-    async handleSubmit() {
-      this.isLoading = true
-      this.errorMessage = '' // 清空之前的错误信息
+  name: 'LoginForm',
+  setup() {
+    // 定义表单数据
+    const email = ref('');
+    const password = ref('');
+    const isLoading = ref(false);  // 用于处理加载状态
+    const errorMessage = ref('');  // 用于显示错误消息
+
+    // 获取 router 实例
+    const router = useRouter();
+
+    // 处理登录请求
+    const handleLogin = async () => {
+      isLoading.value = true;
+      errorMessage.value = ''; // 清空之前的错误信息
 
       try {
-        const response = await axios.post('/login', {
-          username: this.username,
-          password: this.password,
-        })
+        // 发送登录请求到后端
+        const response = await axios.post('/api/login', {
+          user_email: email.value,  // 将邮箱作为 user_email 发送
+          user_password: password.value,  // 密码作为 user_password 发送
+        });
 
-        if (response.data.success) {
-          console.log('登录成功:', response.data)
-          localStorage.setItem('token', response.data.token) // 存储 token
-          this.$router.push('/dashboard') // 跳转到其他页面
+        // 处理成功的响应
+        if (response.data.message === 'Login successful!') {
+          // 登录成功，跳转到主页
+          alert('登录成功！');
+          router.push('/home');  // 路由跳转到主页（可以根据实际情况调整路由）
         } else {
-          this.errorMessage = response.data.message || '登录失败，请检查账号和密码'
+          // 如果后端返回了错误信息
+          errorMessage.value = response.data.error || '登录失败，请稍后重试';
         }
       } catch (error) {
-        console.error('请求失败:', error)
-        this.errorMessage = '请求失败，请稍后重试'
+        console.error('请求失败:', error);
+        errorMessage.value = '请求失败，请稍后重试';
       } finally {
-        this.isLoading = false
+        isLoading.value = false;
       }
-    },
+    };
+
+    return {
+      email,
+      password,
+      isLoading,
+      errorMessage,
+      handleLogin,
+    };
   },
-}
+};
 </script>
 
 <style scoped>
+/* 背景样式 */
+.login-container {
+  width: 100%;
+  height: 100vh;
+  background: url('@/assets/background.png') no-repeat center center fixed;
+  background-size: cover;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 登录框样式 */
 .login-box {
-  width: 300px;
-  padding: 20px;
-  margin-left: 400px;
+  width: 400px;
+  padding: 30px;
   background: rgba(255, 255, 255, 0.9); /* 半透明背景 */
   border-radius: 8px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* 标题样式 */
 h2 {
+  margin-bottom: -10px;
   text-align: center;
-  margin-bottom: 20px;
+  font-size: 32px;  /* 和注册页面一致的字体大小 */
+  font-weight: bold;  /* 加粗 */
+  color: #575555;
 }
 
+/* 输入框样式 */
 .input-group {
-  margin-bottom: 15px;
+  margin-bottom: 5px; /* 增加输入框之间的间距 */
 }
 
 input {
-  width: 100%;
-  padding: 8px;
-  margin-top: 5px;
+  width: 80%;
+  padding: 10px;
+  margin-top: 20px;
   border: 1px solid #ccc;
   border-radius: 4px;
+  font-size: 16px;
+  margin-bottom: 20px;
 }
 
+/* 按钮样式 */
 button {
   width: 100%;
-  padding: 10px;
-  background-color: #42b983;
+  padding: 12px;
+  background-color: #3f4040;
   color: white;
   border: none;
   border-radius: 4px;
-  font-size: 16px;
+  font-size: 18px;
   cursor: pointer;
+  margin-top: 20px;
 }
 
 button:hover {
-  background-color: #36a375;
+  background-color: #5e6663;
 }
 
 button:disabled {
   background-color: #ccc;
 }
 
-p {
-  font-size: 14px;
+/* 注册链接样式 */
+.register-link {
   text-align: center;
+  font-size: 14px;
+  margin-top: 20px;
+}
+
+/* 添加的 footer-text 样式 */
+.footer-text {
+  font-size: 12px;
+  color: #aaa;
+  text-align: center;
+  margin-top: 20px;
+}
+
+label {
+  margin-right: 15px;
 }
 </style>
