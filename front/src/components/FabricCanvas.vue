@@ -76,7 +76,7 @@
         });
   
         // 绘制实体框
-        const entityGroups = [];
+        //const entityGroups = [];
         entities.forEach((entity) => {
           const entityChars = charGroups.filter((c) => c.entity.id === entity.id);
           if (entityChars.length > 0) {

@@ -33,6 +33,7 @@
 </template>
 
 <script>
+import register from 'axios'
 export default {
   data() {
     return {
