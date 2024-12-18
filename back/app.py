@@ -486,7 +486,7 @@ def upload_data():
     if not data:
         return jsonify({"error": "No JSON data provided"}), 400
 
-    user_id = data.get('user_id')
+    user_id = decode_jwt(data.get('user_id'))
     project_id = data.get('project_id')
     if not user_id or not project_id:
         return jsonify({"error": "user_id and project_id are required"}), 400
