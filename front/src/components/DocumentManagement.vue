@@ -4,7 +4,7 @@
       <span class="document-text" style="font-weight: bold">文档管理：</span>
       <div class="document-actions-buttons">
         <button @click="handleImportDocuments" class="btn import-btn">导入文档</button>
-        <button @click="handleExportDocuments" class="btn export-btn">导出文档</button>
+        <!--<button @click="handleExportDocuments" class="btn export-btn">导出文档</button>-->
         <button @click="handleCreateDocument" class="btn create-btn">创建文档</button>
       </div>
     </header>
@@ -14,10 +14,12 @@
         <div class="document-info">
           <h3>{{ document.doc_name }}</h3>
           <p>创建日期: {{ formatDate(document.doc_create) }}</p>
-          <p>文档描述: {{ document.doc_descirbe }}</p>
+          <p>文档描述: {{ document.doc_describe }}</p>
         </div>
         <div class="document-actions">
           <button @click="openDocument(document)" class="btn open-btn">打开文档</button>
+          <!-- 其他操作按钮可以在这里添加 -->
+          <button @click="deleteDocument(document)" class="btn delete-btn">删除文档</button>
           <!-- 其他操作按钮可以在这里添加 -->
         </div>
       </div>
@@ -29,7 +31,7 @@
       ref="fileInput"
       multiple
       @change="importFiles"
-      accept=".txt, .docx, .pdf, .xlsx"
+      accept=".txt, .docx, .pdf,.xlsx"
       style="display: none"
     />
   </div>
@@ -38,22 +40,28 @@
 <script>
 import axios from 'axios'
 import mammoth from 'mammoth'
+import Cookies from 'js-cookie'
+import * as XLSX from 'xlsx' // 导入 SheetJS
+import * as pdfjsLib from 'pdfjs-dist'
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js'
 
 export default {
   props: {
     projectId: {
-      type: Number,
+      type: String,
       required: true,
     },
     userId: {
       // 添加 userId 作为 prop，确保每个文档关联到用户
       type: Number,
-      required: true,
+      required: false,
     },
   },
   data() {
     return {
       documents: [],
+      user_id: Cookies.get('userId'),
     }
   },
   created() {
@@ -62,6 +70,7 @@ export default {
   methods: {
     // 获取文档数据
     fetchDocuments() {
+      //console.log('User ID:', this.user_id)
       //   this.documents = [
       //     {
       //       doc_id: 1,
@@ -83,6 +92,7 @@ export default {
       //     },
       //   ]
       // 使用 Axios 从后端 API 获取文档数据，根据 projectId 过滤
+
       axios
         .get(`http://127.0.0.1:5000/projects/${this.projectId}/documents`)
         .then((response) => {
@@ -111,9 +121,32 @@ export default {
     openDocument(document) {
       // 这里可以通过路由跳转到文档详情页，或者打开一个模态框展示文档内容
       // 目前我们使用 alert 来示范
-      alert(`打开文档: ${document.doc_name}\n内容: ${document.doc_content}`)
+      //alert(`打开文档: ${document.doc_name}\n内容: ${document.doc_content}`)
       // 示例：跳转到文档详情页
       // this.$router.push({ name: 'DocumentDetail', params: { docId: document.doc_id } })
+      // 跳转到创建文档页面
+      this.$router.push(`/entitytagging?doc_id=${document.doc_id}`)
+    },
+    deleteDocument(document) {
+      const confirmDelete = window.confirm('确定要删除该文档吗？')
+
+      if (confirmDelete) {
+        // 发送DELETE请求
+        axios
+          .delete('http://127.0.0.1:5000/api/deleteDocument', {
+            data: { doc_id: document.doc_id }, // 通过data发送JSON数据
+          })
+          .then((response) => {
+            if (response.status === 200) {
+              alert('文档已删除')
+              this.fetchDocuments() // 删除成功后重新获取文档列表
+            }
+          })
+          .catch((error) => {
+            console.error('删除文档失败:', error)
+            alert('删除文档失败，请稍后再试')
+          })
+      }
     },
     // 导出所有文档
     handleExportDocuments() {
@@ -157,28 +190,26 @@ export default {
             file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           ) {
             content = await this.convertDocxToText(file)
+          } else if (file.type === 'application/pdf') {
+            content = await this.convertPdfToText(file)
           } else if (
-            file.type === 'application/pdf' ||
             file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           ) {
-            // 处理其他文件类型，如果需要，可以实现相应的解析
-            content = `不支持的文件类型: ${file.type}`
+            content = await this.convertXlsxToText(file)
           } else {
-            content = `未知的文件类型: ${file.type}`
+            content = `不支持的文件类型: ${file.type}`
           }
-
-          // 限制 doc_content 为 255 个字符，如果需要更长，确保数据库字段支持
-          const truncatedContent = content
 
           const docName = file.name
           const docDesc = `导入的文件: ${file.name}`
 
           // 创建文档对象
           const newDocument = {
+            user_id: this.user_id, // 使用 data 中的 user_id
             project_id: this.projectId,
             name: docName,
-            content: truncatedContent,
-            descirbe: docDesc,
+            content: content,
+            describe: docDesc,
           }
 
           // 发送 POST 请求到后端 API 以保存文档
@@ -226,6 +257,80 @@ export default {
             .catch((err) => {
               reject(err)
             })
+        }
+        reader.onerror = (e) => {
+          reject(e)
+        }
+        reader.readAsArrayBuffer(file)
+      })
+    },
+
+    // 将 .xlsx 文件转换为文本
+    convertXlsxToText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          try {
+            const data = new Uint8Array(e.target.result)
+            const workbook = XLSX.read(data, { type: 'array' })
+            let text = ''
+
+            workbook.SheetNames.forEach((sheetName) => {
+              const worksheet = workbook.Sheets[sheetName]
+              const sheetText = XLSX.utils.sheet_to_csv(worksheet)
+              text += sheetText + '\n'
+            })
+
+            resolve(text)
+          } catch (error) {
+            reject(error)
+          }
+        }
+        reader.onerror = (e) => {
+          reject(e)
+        }
+        reader.readAsArrayBuffer(file)
+      })
+    },
+
+    // 将 .pdf 文件转换为文本
+    convertPdfToText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = async (e) => {
+          const arrayBuffer = e.target.result
+          try {
+            // 使用 pdf.js 加载 PDF 文件
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise
+            let textContent = ''
+
+            // 遍历 PDF 页数并提取每页的文本
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+              const page = await pdf.getPage(pageNum)
+              const text = await page.getTextContent()
+              text.items.forEach((item) => {
+                textContent += item.str + ' '
+              })
+            }
+
+            resolve(textContent)
+          } catch (error) {
+            reject(error)
+          }
+        }
+        reader.onerror = (e) => {
+          reject(e)
+        }
+        reader.readAsArrayBuffer(file)
+      })
+    },
+
+    // 读取文件为 ArrayBuffer
+    readFileAsArrayBuffer(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          resolve(e.target.result)
         }
         reader.onerror = (e) => {
           reject(e)
@@ -333,7 +438,16 @@ header {
   border-radius: 4px;
   cursor: pointer;
 }
-
+.delete-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 10px;
+}
 .document-actions .open-btn:hover {
   background-color: #0056b3;
 }

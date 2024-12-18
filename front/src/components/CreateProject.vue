@@ -34,12 +34,13 @@
 
 <script>
 import axios from 'axios'
-
+import Cookies from 'js-cookie'
 export default {
   data() {
     return {
       projectName: '',
       projectDescription: '',
+      //userId: localStorage.getItem('userId'), // 假设你已经从登录状态中获取了用户 ID
     }
   },
   methods: {
@@ -49,23 +50,20 @@ export default {
     },
 
     // 提交表单
+    // 发送数据到后端创建项目
     async handleSubmit() {
-      if (this.projectName.trim() === '') {
-        alert('项目名称是必填项')
-        return
-      }
-
-      // 发送数据到后端
+      //console.log(Cookies.get('userId'))
       try {
-        const response = await axios.post('/api/projects', {
-          name: this.projectName,
-          description: this.projectDescription,
+        const response = await axios.post(`http://127.0.0.1:5000/api/createProject`, {
+          user_id: Cookies.get('userId'),
+          project_name: this.projectName,
+          project_describe: this.projectDescription,
         })
-
-        // 如果创建成功，跳转回项目管理页面
+        // 如果创建成功，获取返回的 project_id，并跳转到项目管理页面
         if (response.status === 201) {
+          //const projectId = response.data.project_id // 获取新创建的 project_id
           alert('项目创建成功')
-          this.$router.push('/project-management') // 跳转到项目管理页面
+          this.$router.push(`/project-management`) // 跳转到项目管理页面
         }
       } catch (error) {
         console.error('创建项目失败', error)

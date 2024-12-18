@@ -34,6 +34,7 @@
 
 <script>
 import axios from 'axios'
+import Cookies from 'js-cookie'
 export default {
   data() {
     return {
@@ -63,6 +64,7 @@ export default {
             name: this.documentName,
             description: this.documentDescription,
             project_id: this.projectId,
+            user_id: Cookies.get('userId'),
           },
         )
 
