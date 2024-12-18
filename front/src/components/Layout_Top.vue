@@ -1,3 +1,4 @@
+<!-- src/components/Layout_Top.vue -->
 <template>
   <div class="layout">
     <!-- 顶部导航栏 -->
@@ -7,8 +8,8 @@
         <span class="logo-text">浙江工商大学古籍标注平台</span>
       </div>
 
-      <!-- 右上角的退出按钮 -->
-      <div class="logout">
+      <!-- 右上角的用户信息和退出按钮 -->
+      <div class="user-info">
         <button @click="handleLogout" class="logout-button">退出</button>
       </div>
     </header>
@@ -22,12 +23,21 @@
 </template>
 
 <script>
+import Cookies from 'js-cookie' // 引入 js-cookie
+
 export default {
+  name: 'Layout_Top',
+  created() {
+    if (!Cookies.get('userId')) {
+      alert('未检测到登录信息，请先登录。')
+      this.$router.push({ name: 'login' })
+    }
+  },
   methods: {
     handleLogout() {
       alert('您已退出')
-      // 清除 Token 或跳转到登录页面
-      this.$router.push('/login')
+      Cookies.remove('userId') // 移除 userId Cookie
+      this.$router.push({ name: 'login' })
     },
   },
 }
@@ -70,8 +80,15 @@ export default {
   color: #333;
 }
 
-.center-button {
-  text-align: center;
+.user-info {
+  display: flex;
+  align-items: center;
+}
+
+.user-info span {
+  margin-right: 20px;
+  font-size: 14px;
+  color: #555;
 }
 
 .logout-button {

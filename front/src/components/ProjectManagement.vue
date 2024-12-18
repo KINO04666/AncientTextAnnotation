@@ -10,11 +10,14 @@
         <div class="project-info">
           <h3>{{ project.project_name }}</h3>
           <p>创建日期: {{ formatDate(project.project_create) }}</p>
-          <p>项目详情: {{ project.project_descirbe }}</p>
+          <p>项目详情: {{ project.project_describe }}</p>
         </div>
         <div class="project-actions">
           <button @click="openProject(project.project_id)" class="open-project-button">
             打开项目
+          </button>
+          <button @click="deleteProject(project.project_id)" class="delete-project-button">
+            删除项目
           </button>
         </div>
       </div>
@@ -23,51 +26,54 @@
 </template>
 
 <script>
+import axios from 'axios'
+import Cookies from 'js-cookie' // 引入 js-cookie
 export default {
   data() {
     return {
       projects: [],
+      user_id: Cookies.get('userId'),
     }
   },
   created() {
+    //console.log(this.user_id)
     this.fetchProjects()
   },
   methods: {
     // 获取项目数据
     fetchProjects() {
+      //console.log(this.user_id)
       // 示例静态数据，后续可替换为从数据库获取的数据
-
-      this.projects = [
-        {
-          project_id: '1',
-          project_name: '项目A',
-          project_create: '2024-01-01',
-          project_descirbe: '这是一个项目A的描述',
-        },
-        {
-          project_id: '2',
-          project_name: '项目B',
-          project_create: '2024-02-15',
-          project_descirbe: '这是一个项目B的描述',
-        },
-        {
-          project_id: '3',
-          project_name: '项目C',
-          project_create: '2024-03-20',
-          project_descirbe: '这是一个项目C的描述',
-        },
-      ]
+      // this.projects = [
+      //   {
+      //     project_id: '1',
+      //     project_name: '项目A',
+      //     project_create: '2024-01-01',
+      //     project_descirbe: '这是一个项目A的描述',
+      //   },
+      //   {
+      //     project_id: '2',
+      //     project_name: '项目B',
+      //     project_create: '2024-02-15',
+      //     project_descirbe: '这是一个项目B的描述',
+      //   },
+      //   {
+      //     project_id: '3',
+      //     project_name: '项目C',
+      //     project_create: '2024-03-20',
+      //     project_descirbe: '这是一个项目C的描述',
+      //   },
+      // ]
 
       // 使用 Axios 从后端 API 获取项目数据
-      /*
-      axios.get('/api/projects')
-        .then(response => {
-          this.projects = response.data
+      axios
+        .get(`http://127.0.0.1:5000/api/getProject?user_id=${this.user_id}`)
+        .then((response) => {
+          this.projects = response.data['project-list']
         })
-        .catch(error => {
+        .catch((error) => {
           console.error('获取项目数据失败:', error)
         })
-      */
     },
     // 格式化日期
     formatDate(date) {
@@ -76,12 +82,38 @@ export default {
     // 打开项目
     openProject(projectId) {
       // 跳转到文档管理页面，并传递项目ID
-      this.$router.push({ name: 'DocumentManagement', params: { projectId } })
+      this.$router.push({
+        name: 'DocumentManagement',
+        params: { projectId: projectId },
+      })
+    },
+    deleteProject(projectId) {
+      const confirmDelete = window.confirm('确定要删除该项目吗？')
+
+      if (confirmDelete) {
+        // 发送DELETE请求
+        axios
+          .delete('http://127.0.0.1:5000/api/deleteProject', {
+            data: { project_id: projectId }, // 通过data发送JSON数据
+          })
+          .then((response) => {
+            if (response.status === 200) {
+              alert('项目已删除')
+              this.fetchProjects() // 删除成功后重新获取项目列表
+            }
+          })
+          .catch((error) => {
+            console.error('删除项目失败:', error)
+            alert('删除项目失败，请稍后再试')
+          })
+      }
     },
     // 创建新项目
     handleCreateProject() {
       // 跳转到创建项目页面
-      this.$router.push('/create-project')
+      this.$router.push({
+        name: 'CreateProject',
+      })
     },
   },
 }
@@ -142,6 +174,16 @@ export default {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+}
+.delete-project-button {
+  padding: 8px 16px;
+  font-size: 14px;
+  background-color: #dc3545; /* 红色 */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 10px; /* 给按钮添加间隔 */
 }
 
 .project-actions .open-project-button:hover {
