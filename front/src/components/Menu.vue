@@ -6,34 +6,43 @@
     </div>
     <ul class="button-list">
       <li>
-        <router-link to="/" class="button">
+        <router-link
+          :to="{ path: '/entitytagging', query: { doc_id: this.doc_id } }"
+          class="button"
+        >
           <el-icon><Operation /></el-icon>
           <span class="button-text">结构标注</span>
         </router-link>
       </li>
       <li>
-        <router-link to="/entitytagging" class="button">
+        <router-link
+          :to="{ path: '/entitytagging', query: { doc_id: this.doc_id } }"
+          class="button"
+        >
           <el-icon><Aim /></el-icon>
           <span class="button-text">实体标注</span>
         </router-link>
       </li>
       <li>
-        <router-link to="/relationshipannotation" class="button">
+        <router-link
+          :to="{ path: '/relationshipannotation', query: { doc_id: this.doc_id } }"
+          class="button"
+        >
           <el-icon><Rank /></el-icon>
           <span class="button-text">关系标注</span>
         </router-link>
       </li>
       <li>
-        <router-link to="/map" class="button">
+        <router-link :to="{ path: '/map', query: { doc_id: this.doc_id } }" class="button">
           <el-icon><Film /></el-icon>
           <span class="button-text">知识图谱</span>
         </router-link>
       </li>
       <li>
-        <router-link to="/" class="button">
-          <el-icon><ArrowRightBold /></el-icon>
+        <button class="button" :click="ExportJson">
+          <el-icon><Film /></el-icon>
           <span class="button-text">导出数据</span>
-        </router-link>
+        </button>
       </li>
     </ul>
     <div class="exit">
@@ -49,7 +58,18 @@
     </div>
   </div>
 </template>
-
+<script>
+export default {
+  data() {
+    return {
+      doc_id: this.$route.query.doc_id,
+    }
+  },
+  created() {
+    console.log(this.doc_id)
+  },
+}
+</script>
 <style scoped>
 .menu {
   display: flex; /* 使用 Flexbox 布局 */
@@ -90,6 +110,7 @@
   background-color: #fff; /* 背景颜色为白色 */
   color: #000;
   border-radius: 50px; /* 圆角，使按钮呈现为圆框 */
+  border: none; /* 移除按钮边框 */
   cursor: pointer; /* 鼠标悬停时显示为手指形状 */
   transition:
     background-color 0.3s,
@@ -109,7 +130,9 @@
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3); /* 内阴影效果 */
   transform: translateY(2px); /* 按下时稍微下移 */
 }
-
+.button-text {
+  font-size: 16px;
+}
 .exit {
   display: flex; /* 使用 Flexbox 布局 */
   align-items: center; /* 垂直居中对齐 */

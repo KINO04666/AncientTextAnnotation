@@ -7,34 +7,43 @@
       </div>
       <ul class="button-list">
         <li>
-          <router-link to="/" class="button">
+          <router-link
+            :to="{ path: '/entitytagging', query: { doc_id: this.doc_id } }"
+            class="button"
+          >
             <el-icon><Operation /></el-icon>
             <span class="button-text">结构标注</span>
           </router-link>
         </li>
         <li>
-          <router-link to="/entitytagging" class="button">
+          <router-link
+            :to="{ path: '/entitytagging', query: { doc_id: this.doc_id } }"
+            class="button"
+          >
             <el-icon><Aim /></el-icon>
             <span class="button-text">实体标注</span>
           </router-link>
         </li>
         <li>
-          <router-link to="/relationshipannotation" class="button">
+          <router-link
+            :to="{ path: '/relationshipannotation', query: { doc_id: this.doc_id } }"
+            class="button"
+          >
             <el-icon><Rank /></el-icon>
             <span class="button-text">关系标注</span>
           </router-link>
         </li>
         <li>
-          <router-link to="/map" class="button">
+          <router-link :to="{ path: '/map', query: { doc_id: this.doc_id } }" class="button">
             <el-icon><Film /></el-icon>
             <span class="button-text">知识图谱</span>
           </router-link>
         </li>
         <li>
-          <router-link to="/" class="button">
-            <el-icon><ArrowRightBold /></el-icon>
+          <button class="button" @click="ExportJson">
+            <el-icon><Film /></el-icon>
             <span class="button-text">导出数据</span>
-          </router-link>
+          </button>
         </li>
       </ul>
       <div class="exit">
@@ -54,7 +63,55 @@
     </div>
   </div>
 </template>
+<script>
+import axios from 'axios'
 
+export default {
+  data() {
+    return {
+      data: null,
+      doc_id: this.$route.query.doc_id,
+    }
+  },
+  methods: {
+    async fetchData() {
+      try {
+        const response = await axios.get(`http://127.0.0.1:5000/get/${this.doc_id}`)
+        const data = response.data
+        delete data.doc_id
+        delete data.doc_create
+        delete data.doc_modify
+        this.data = data
+      } catch (error) {
+        console.error('获取数据失败', error)
+        alert('没有获取到数据！')
+      }
+    },
+    async ExportJson() {
+      await this.fetchData()
+      // 转换为 JSON 字符串，格式化为 2 个空格缩进
+      const jsonData = JSON.stringify(this.data, null, 2)
+      console.log(jsonData)
+      // 创建 Blob 对象
+      const blob = new Blob([jsonData], { type: 'application/json' })
+
+      // 生成下载链接
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+
+      // 设定下载文件名
+      link.download = `${this.data.doc_name}_export.json`
+
+      // 模拟用户点击
+      link.click()
+
+      // 释放 URL 对象
+      URL.revokeObjectURL(url)
+    },
+  },
+}
+</script>
 <style scoped>
 .layout {
   display: flex;
@@ -103,6 +160,7 @@
   background-color: #fff; /* 背景颜色为白色 */
   color: #000;
   border-radius: 50px; /* 圆角，使按钮呈现为圆框 */
+  border: none; /* 移除按钮边框 */
   cursor: pointer; /* 鼠标悬停时显示为手指形状 */
   transition:
     background-color 0.3s,
@@ -130,7 +188,9 @@
   margin-left: 100px;
   justify-content: space-around; /* 元素之间均匀分布 */
 }
-
+.button-text {
+  font-size: 16px;
+}
 .tobutton {
   display: flex; /* 使用 Flexbox 使图标居中 */
   justify-content: center; /* 水平居中 */

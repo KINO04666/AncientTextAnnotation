@@ -17,10 +17,11 @@ import { onMounted, onUnmounted } from 'vue'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import axios from 'axios'
 import RelationGraph from './RelationGraph.vue' // 引入网络关系图组件
-
+import { useRoute } from 'vue-router'
+import { ref } from 'vue'
 let map = null
 let markers = []
-
+const route = useRoute()
 // 获取地点经纬度并标注
 const getLocationData = async (placeName) => {
   try {
@@ -101,10 +102,10 @@ onMounted(() => {
 
       const terrainLayer = new AMap.TileLayer.Satellite({ zIndex: 0 })
       map.add(terrainLayer)
-
+      const doc_id = ref(route.query.doc_id)
       // 假设从后端获取到 entities 数据
       axios
-        .get('http://127.0.0.1:5000/get/26') // 假设获取文档ID为26的数据
+        .get(`http://127.0.0.1:5000/get/${doc_id.value}`) // 假设获取文档ID为26的数据
         .then((response) => {
           const entities = response.data.entities // 获取 entities 数据
           updateMap(entities) // 更新地图

@@ -414,14 +414,14 @@ def create_document(project_id):
         return jsonify({'error': '数据库连接失败'}), 500
 
     cursor = connection.cursor()
-
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     # 插入文档记录到数据库
     query = """
         INSERT INTO document (user_id,project_id, doc_name, doc_content, doc_describe, doc_create,doc_modify)
-        VALUES (%s,%s, %s, %s, %s, CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+        VALUES (%s,%s, %s, %s, %s, %s,%s)
     """
     try:
-        cursor.execute(query, (user_id,project_id, doc_name, doc_content, doc_desc))
+        cursor.execute(query, (user_id,project_id, doc_name, doc_content, doc_desc,now,now))
         connection.commit()
         new_doc_id = cursor.lastrowid  # 获取刚插入记录的ID
 

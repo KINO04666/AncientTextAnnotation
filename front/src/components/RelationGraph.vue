@@ -9,14 +9,15 @@
 import { onMounted, ref } from 'vue'
 import axios from 'axios'
 import { Network } from 'vis-network/standalone'
-
+import { useRoute } from 'vue-router'
 // 定义网络图容器的引用
 const networkContainer = ref(null)
-
+const route = useRoute()
+const doc_id = ref(route.query.doc_id)
 // 定义函数以获取数据并渲染网络图
 const fetchDataAndRender = async () => {
   try {
-    const response = await axios.get('http://localhost:5000/get/26')
+    const response = await axios.get(`http://localhost:5000/get/${doc_id.value}`)
     const data = response.data
 
     const nodes = data.entities.map((entity) => ({
@@ -72,7 +73,7 @@ const fetchDataAndRender = async () => {
     new Network(networkContainer.value, { nodes, edges }, options)
   } catch (error) {
     console.error('Error fetching or rendering data:', error)
-    alert('无法获取文档数据，请检查服务器是否运行或 API 是否正确')
+    alert('没有获取到实体和关系数据，请添加实体和关系！')
   }
 }
 
