@@ -35,6 +35,7 @@
 <script>
 import axios from 'axios'
 import Cookies from 'js-cookie'
+import api from '@/axios/axios'
 export default {
   data() {
     return {
@@ -58,15 +59,12 @@ export default {
 
       // 发送数据到后端创建文档
       try {
-        const response = await axios.post(
-          `http://127.0.0.1:5000/projects/${this.projectId}/documents`,
-          {
-            name: this.documentName,
-            description: this.documentDescription,
-            project_id: this.projectId,
-            user_id: Cookies.get('userId'),
-          },
-        )
+        const response = await api.post(`/projects/${this.projectId}/documents`, {
+          name: this.documentName,
+          description: this.documentDescription,
+          project_id: this.projectId,
+          user_id: Cookies.get('userId'),
+        })
 
         // 如果创建成功，跳转回文档管理页面
         if (response.status === 201) {

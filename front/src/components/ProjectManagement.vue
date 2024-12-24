@@ -26,6 +26,7 @@
 </template>
 
 <script>
+import api from '@/axios/axios'
 import axios from 'axios'
 import Cookies from 'js-cookie' // 引入 js-cookie
 export default {
@@ -66,8 +67,12 @@ export default {
       // ]
 
       // 使用 Axios 从后端 API 获取项目数据
-      axios
-        .get(`http://127.0.0.1:5000/api/getProject?user_id=${this.user_id}`)
+      api
+        .get(`/api/getProject`, {
+          headers: {
+            Authorization: `Bearer ${this.user_id}`,
+          },
+        })
         .then((response) => {
           this.projects = response.data['project-list']
         })
@@ -92,8 +97,11 @@ export default {
 
       if (confirmDelete) {
         // 发送DELETE请求
-        axios
-          .delete('http://127.0.0.1:5000/api/deleteProject', {
+        api
+          .delete('/api/deleteProject', {
+            headers: {
+              Authorization: `Bearer ${this.user_id}`, // 添加Authorization请求头
+            },
             data: { project_id: projectId }, // 通过data发送JSON数据
           })
           .then((response) => {

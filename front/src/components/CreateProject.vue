@@ -35,6 +35,7 @@
 <script>
 import axios from 'axios'
 import Cookies from 'js-cookie'
+import api from '@/axios/axios'
 export default {
   data() {
     return {
@@ -54,7 +55,7 @@ export default {
     async handleSubmit() {
       //console.log(Cookies.get('userId'))
       try {
-        const response = await axios.post(`http://127.0.0.1:5000/api/createProject`, {
+        const response = await api.post(`/api/createProject`, {
           user_id: Cookies.get('userId'),
           project_name: this.projectName,
           project_describe: this.projectDescription,

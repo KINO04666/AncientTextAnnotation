@@ -47,13 +47,10 @@
         </li>
       </ul>
       <div class="exit">
-        <button class="tobutton" title="个人信息">
-          <el-icon style="font-size: 24px"><User /></el-icon>
-        </button>
-        <button class="tobutton" title="返回项目">
+        <router-link :to="{ path: '/project-management' }" class="tobutton">
           <el-icon style="font-size: 24px"><Folder /></el-icon>
-        </button>
-        <button class="tobutton" title="退出">
+        </router-link>
+        <button class="tobutton" title="退出" @click="handleLogout">
           <el-icon style="font-size: 24px"><Right /></el-icon>
         </button>
       </div>
@@ -64,19 +61,27 @@
   </div>
 </template>
 <script>
+import api from '@/axios/axios'
 import axios from 'axios'
+import Cookies from 'js-cookie'
 
 export default {
   data() {
     return {
       data: null,
       doc_id: this.$route.query.doc_id,
+      user_id: Cookies.get('userId'),
     }
   },
   methods: {
+    handleLogout() {
+      alert('您已退出')
+      Cookies.remove('userId') // 移除 userId Cookie
+      this.$router.push({ name: 'login' })
+    },
     async fetchData() {
       try {
-        const response = await axios.get(`http://127.0.0.1:5000/get/${this.doc_id}`)
+        const response = await api.get(`/get/${this.doc_id}`)
         const data = response.data
         delete data.doc_id
         delete data.doc_create
@@ -109,6 +114,22 @@ export default {
       // 释放 URL 对象
       URL.revokeObjectURL(url)
     },
+    async Verified() {
+      try {
+        await api.get(`/document/${this.doc_id}`, {
+          headers: {
+            Authorization: `Bearer ${this.user_id}`,
+          },
+        })
+      } catch (error) {
+        console.error(error)
+        alert('文档获取失败！')
+        this.$router.push('/project-management')
+      }
+    },
+  },
+  created() {
+    this.Verified()
   },
 }
 </script>
@@ -151,6 +172,7 @@ export default {
   justify-content: space-around; /* 元素之间均匀分布 */
   align-items: center; /* 垂直居中对齐 */
   list-style-type: none; /* 去掉列表项的项目符号 */
+  flex-shrink: 0;
 }
 
 .button {

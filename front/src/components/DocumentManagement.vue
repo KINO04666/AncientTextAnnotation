@@ -39,6 +39,7 @@
 
 <script>
 import axios from 'axios'
+import api from '@/axios/axios'
 import mammoth from 'mammoth'
 import Cookies from 'js-cookie'
 import * as XLSX from 'xlsx' // 导入 SheetJS
@@ -93,13 +94,19 @@ export default {
       //   ]
       // 使用 Axios 从后端 API 获取文档数据，根据 projectId 过滤
 
-      axios
-        .get(`http://127.0.0.1:5000/projects/${this.projectId}/documents`)
+      api
+        .get(`/projects/${this.projectId}/documents`, {
+          headers: {
+            Authorization: `Bearer ${this.user_id}`,
+          },
+        })
         .then((response) => {
           this.documents = response.data
         })
         .catch((error) => {
           console.error('获取文档数据失败:', error)
+          alert('此项目不是你的项目！')
+          this.$router.push('/project-management')
         })
 
       // 如果使用代理，则可以简化为：
@@ -132,8 +139,8 @@ export default {
 
       if (confirmDelete) {
         // 发送DELETE请求
-        axios
-          .delete('http://127.0.0.1:5000/api/deleteDocument', {
+        api
+          .delete('/api/deleteDocument', {
             data: { doc_id: document.doc_id }, // 通过data发送JSON数据
           })
           .then((response) => {
@@ -209,9 +216,10 @@ export default {
               entities: content.entities,
               enti: content.enti,
               relations: content.relations,
+              relation_types: content.relation_types,
             }
             console.log(newDocument)
-            await axios.post(`http://127.0.0.1:5000/upload`, newDocument).catch((error) => {
+            await api.post(`/upload`, newDocument).catch((error) => {
               console.error(`导入文档失败:`, error)
             })
             // 清空文件输入
@@ -235,8 +243,8 @@ export default {
           }
 
           // 发送 POST 请求到后端 API 以保存文档
-          await axios
-            .post(`http://127.0.0.1:5000/projects/${this.projectId}/documents`, newDocument)
+          await api
+            .post(`/projects/${this.projectId}/documents`, newDocument)
 
             .catch((error) => {
               console.error(`导入文档 "${docName}" 失败:`, error)

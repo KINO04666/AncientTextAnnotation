@@ -7,7 +7,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import axios from 'axios'
+import api from '@/axios/axios'
 import { Network } from 'vis-network/standalone'
 import { useRoute } from 'vue-router'
 // 定义网络图容器的引用
@@ -17,7 +17,7 @@ const doc_id = ref(route.query.doc_id)
 // 定义函数以获取数据并渲染网络图
 const fetchDataAndRender = async () => {
   try {
-    const response = await axios.get(`http://localhost:5000/get/${doc_id.value}`)
+    const response = await api.get(`/get/${doc_id.value}`)
     const data = response.data
 
     const nodes = data.entities.map((entity) => ({

@@ -13,7 +13,7 @@ import MapView from '@/components/MapView.vue'
 import EntityTagging from '@/components/EntityTagging.vue'
 import RelationshipAnnotation from '@/components/RelationshipAnnotation.vue'
 import RelationGraph from '@/components/RelationGraph.vue'
-import Menu2 from '@/components/Menu2.vue'
+import HeaderNav from '@/components/HeaderNav.vue'
 // import CreateDocument from '@/components/CreateDocument.vue' // 如果有创建文档页面
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -94,25 +94,25 @@ const router = createRouter({
       component: RelationGraph,
     },
     {
-      path: '/menu2',
-      component: Menu2,
+      path: '/headernav',
+      component: HeaderNav,
       children: [
         {
           path: '/map',
           name: 'Map',
           component: MapView,
         },
+        {
+          path: '/entitytagging',
+          name: 'EntityTagging',
+          component: EntityTagging,
+        },
+        {
+          path: '/relationshipannotation',
+          name: 'RelationshipAnnotation',
+          component: RelationshipAnnotation,
+        },
       ],
-    },
-    {
-      path: '/entitytagging',
-      name: 'EntityTagging',
-      component: EntityTagging,
-    },
-    {
-      path: '/relationshipannotation',
-      name: 'RelationshipAnnotation',
-      component: RelationshipAnnotation,
     },
   ],
 })
