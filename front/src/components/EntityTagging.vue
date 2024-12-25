@@ -128,6 +128,7 @@ export default {
         await api.post('/analyze_entity', {
           doc_id: this.docId,
           doc_content: this.data.doc_content,
+          enti: this.data.enti,
         })
       } catch (error) {
         console.error(error)
@@ -347,17 +348,11 @@ export default {
         e.push(newEntity)
         // 更新本地数据
         this.data.enti.push(newEntity)
-
         // 同步到后端
-        await api.post('/upload', {
-          user_id: this.user_id,
-          project_id: this.data.project_id,
+        await api.post('/add_enti', {
           doc_id: this.docId,
-          doc_name: this.data.doc_name,
-          doc_describe: this.data.doc_describe,
-          text: this.data.doc_content,
-          relations: this.data.relations,
-          enti: e,
+          color: newEntity.color,
+          label: newEntity.label,
         })
 
         this.$message({

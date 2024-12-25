@@ -132,7 +132,7 @@ export default {
       // 示例：跳转到文档详情页
       // this.$router.push({ name: 'DocumentDetail', params: { docId: document.doc_id } })
       // 跳转到创建文档页面
-      this.$router.push(`/entitytagging?doc_id=${document.doc_id}`)
+      this.$router.push(`/struct?doc_id=${document.doc_id}`)
     },
     deleteDocument(document) {
       const confirmDelete = window.confirm('确定要删除该文档吗？')

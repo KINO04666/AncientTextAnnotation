@@ -9,15 +9,12 @@ import requests
 from numpy import number
 from werkzeug.security import check_password_hash, generate_password_hash
 import jwt
-
+from openai import OpenAI
+import json
 # JWT 密钥
 SECRET_KEY = "4c7a3b9e3f2d4f7a6c8e5b7d1a2f0c9e9b4e2a3f1d2c3b4d1f5a7c3d4e2f1b6"  # 替换为你自己的密钥
 app = Flask(__name__)
 CORS(app)
-# 替换为你的 GLM-4 API 端点和 API 密钥
-GLM_API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-API_KEY = "fb56a2aa29bb55c4e28ababb5019b82d.i7iQ1tELFxeNjmEP"
-
 
 def token_required(f):
     """装饰器：验证 Token 并提取用户信息"""
@@ -70,200 +67,216 @@ def decode_jwt(token):  # 用来解密jwt
         print("无效的 Token")
         return None
 
+# 初始化 OpenAI 客户端
+client = OpenAI(api_key="sk-0ce886c5f14f48a0be80671c982e77d4", base_url="https://api.deepseek.com")
 
+def extract_entities_with_deepseek(text, entity_types):
+    """
+    使用 DeepSeek API 提取实体。
+    """
+    prompt = f"""
+    以下是一段古籍文本：
+    "{text}"
+
+    请从中提取以下类型的实体：{", ".join(entity_types)}。
+    输出每个实体的 JSON 格式，包括类型(type) 和 值(value)。
+    输出格式严格为 JSON。示例如下：
+    [
+        {{"type": "人物", "value": "李白"}},
+        {{"type": "地点", "value": "长安"}}
+    ]
+    """
+
+    response = client.chat.completions.create(
+        model="deepseek-chat",
+        messages=[{"role": "system", "content": "You are an entity extraction assistant."},
+                  {"role": "user", "content": prompt}],
+        stream=False,
+        max_tokens=4000,  # 限制返回内容的长度
+
+    )
+
+    response_content = response.choices[0].message.content
+    print("模型返回内容：", response_content)
+
+    # 解析模型返回的 JSON 数据
+    try:
+        entities = json.loads(response_content)
+    except json.JSONDecodeError:
+        raise ValueError(f"无法解析模型返回内容为 JSON：{response_content}")
+
+    return entities
+
+
+def find_entity_indices_and_update_enti(original_text, entities, enti):
+    """
+    在本地计算实体的起始和结束位置，并更新传入的 enti 的 number。
+    """
+    indexed_entities = []
+    entity_counts = {item['label']: 0 for item in enti}  # 初始化计数
+
+    for entity in entities:
+        value = entity["value"]
+        label = entity["type"]
+
+        # 查找实体的位置
+        start = original_text.find(value)
+        while start != -1:  # 支持多次出现
+            end = start + len(value) - 1  # 包含最后一个字符的索引
+
+            # 添加实体信息
+            indexed_entities.append({
+                "label": label,
+                "text": value,
+                "start": start,
+                "end": end,
+                "color": next(item['color'] for item in enti if item['label'] == label)  # 使用 enti 中的颜色
+            })
+
+            # 增加对应类别的计数
+            if label in entity_counts:
+                entity_counts[label] += 1
+
+            # 查找下一个出现的位置
+            start = original_text.find(value, start + 1)
+
+    # 更新 enti 的数量
+    for item in enti:
+        if item["label"] in entity_counts:
+            item["number"] = entity_counts[item["label"]]
+
+    return indexed_entities
 @app.route('/analyze_entity', methods=['POST'])
 def analyze_text():
     try:
+        # 定义默认颜色映射
+        color_map = {
+            "人物": {"background": "#32d996", "border": "#007532", "fill": "#007532"},
+            "时间": {"background": "#7cffc7", "border": "#18b95d", "fill": "#18b95d"},
+            "地点": {"background": "#ffff7c", "border": "#9fb918", "fill": "#9fb918"},
+            "职官": {"background": "#ff7ccd", "border": "#b9185d", "fill": "#b9185d"},
+            "书籍": {"background": "#7cb6ff", "border": "#185db9", "fill": "#185db9"}
+        }
+
         # 从请求中获取输入数据
         data = request.get_json()
         if not data or 'doc_content' not in data:
             return jsonify({"error": "无效输入，请提供'doc_content'字段。"}), 400
-        doc_id = data['doc_id']
+
+        doc_id = data.get('doc_id')
+        if not doc_id:
+            return jsonify({"error": "没有提供doc_id，请提供'doc_id'字段。"}), 400
         text = data['doc_content']  # 获取输入的文档内容
-
-        # 简化后的系统提示：提取每个实体类别及其数量
-        system_prompt = (
-            "请从以下文本中提取实体，类别包括：\n"
-            "  1. 人物\n"
-            "  2. 时间\n"
-            "  3. 地点\n"
-            "  4. 职官\n"
-            "  5. 书籍\n"
-            "输出格式：\n"
-            "返回实体的详细信息（包括id, start, end, label, text, color）。"
-        )
-
-        # 调用 GLM-4 API
-        headers = {
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "glm-4-plus",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text}
-            ],
-            "max_tokens": 4096,
-            "temperature": 0.7
-        }
-
-        response = requests.post(GLM_API_URL, json=payload, headers=headers)
-
-        if response.status_code != 200:
-            return jsonify({"error": "调用 GLM-4 API 失败", "status_code": response.status_code,
-                            "response_text": response.text}), 500
-
-        # 获取 GLM 返回的数据
-        model_response = response.json()
-        choices = model_response.get("choices", [])
-        if not choices:
-            return jsonify(
-                {"error": "未收到有效响应。", "response_text": response.text}), 500
-
-        # 提取返回内容
-        result_raw = choices[0].get("message", {}).get("content", "")
-
-        # 如果返回是文本格式，解析它
-        try:
-            entities = []
-
-            # 提取实体详细信息
-            entity_details = re.findall(
-                r'"id": (\d+),\s*"start": (\d+),\s*"end": (\d+),\s*"label": "(.*?)",\s*"text": "(.*?)",\s*"color": "(.*?)"',
-                result_raw)
-            for entity in entity_details:
-                entity_id, start, end, label, text, color = entity
-
-                # 定义每种实体类别的颜色
-                color_map = {
-                    "人物": {
-                        "background": "#32d996",
-                        "border": "#007532",
-                        "fill": "#007532"
-                    },
-                    "时间": {
-                        "background": "#7cffc7",
-                        "border": "#18b95d",
-                        "fill": "#18b95d"
-                    },
-                    "地点": {
-                        "background": "#ffff7c",
-                        "border": "#9fb918",
-                        "fill": "#9fb918"
-                    },
-                    "职官": {
-                        "background": "#ff7ccd",
-                        "border": "#b9185d",
-                        "fill": "#b9185d"
-                    },
-                    "书籍": {
-                        "background": "#7cb6ff",
-                        "border": "#185db9",
-                        "fill": "#185db9"
-                    }
+        # 获取 enti 数据（如果没有提供，则使用默认的五个实体类别和颜色）
+        if 'enti' in data and data.get('enti'):
+            enti = data['enti']  # 使用请求中传入的 enti 数据
+        else:
+            # 默认生成五个实体类别
+            enti = [
+                {
+                    "label": label,
+                    "number": 0,  # 默认数量为 0
+                    "color": color_map[label],  # 从 color_map 获取颜色
+                    "disabled": 0  # 默认状态
                 }
+                for label in color_map.keys()
+            ]
 
-                # 如果实体类别在 color_map 中存在，使用预定义的颜色
-                entity_color = color_map.get(label, {
-                    "background": "#ffffff",
-                    "border": "#000000",
-                    "fill": "#000000"
-                })
+        # 提取 types（从 enti 中提取 label）
+        requested_types = [item['label'] for item in enti]
 
-                entities.append({
-                    "id": int(entity_id),
-                    "start": int(start),
-                    "end": int(end),
-                    "label": label,
-                    "text": text,
-                    "color": entity_color
-                })
+        # 使用 DeepSeek API 提取实体
+        extracted_entities = extract_entities_with_deepseek(text, requested_types)
+        print("提取的实体：", extracted_entities)
 
-            # 手动统计实体的数量，并构建 "enti" 数据
-            entity_counts = {"人物": 0, "时间": 0, "地点": 0, "职官": 0, "书籍": 0}
+        # 本地计算索引，并更新实体类别数量
+        indexed_entities = find_entity_indices_and_update_enti(text, extracted_entities, enti)
+        print("包含索引的实体结果：", indexed_entities)
 
-            # 遍历所有的实体，统计每种类别的数量
-            for entity in entities:
-                label = entity["label"]
+        # 保存数据到 MySQL 数据库
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # 插入 "entities" 数据
+        for entity in indexed_entities:
+            print(entity)
+            cursor.execute("""
+                                   INSERT INTO entities (
+                                       doc_id, original_id, start_pos, end_pos, label, text, 
+                                       color_background, color_border, color_fill
+                                   )
+                                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                               """, (
+                doc_id,
+                -1,  # 如果有原始 ID，可以替换这里
+                entity["start"],
+                entity["end"],
+                entity["label"],
+                entity["text"],
+                entity["color"]["background"],
+                entity["color"]["border"],
+                entity["color"]["fill"]
+            ))
 
-                if label in entity_counts:
-                    entity_counts[label] += 1
+        for item in enti:
+            print(item)
+            # 检查是否已经存在相同的 label
+            cursor.execute("""
+                SELECT number FROM enti_types WHERE doc_id = %s AND label = %s
+            """, (doc_id, item["label"]))
+            result = cursor.fetchone()
 
-            # 构建 "enti" 数据，包含每个类别的数量
-            enti = []
-            for label, count in entity_counts.items():
-                enti.append({
-                    "label": label,
-                    "number": count,
-                    "color": color_map.get(label, {
-                        "background": "#ffffff",
-                        "border": "#000000",
-                        "fill": "#000000"
-                    }),
-                    "disabled": 0
-                })
-            # 保存数据到 MySQL 数据库
-            conn = get_db_connection()
-            cursor = conn.cursor()
-
-            # 插入 "entities" 数据
-            for entity in entities:
-                print(entity)
+            if result:  # 如果存在，则更新 number
+                existing_number = result[0]
+                new_number = existing_number + item["number"]  # 累加数量
                 cursor.execute("""
-                                       INSERT INTO entities ( doc_id,original_id,start_pos, end_pos, label, text, color_background, color_border, color_fill)
-                                       VALUES (%s, %s,%s, %s, %s, %s, %s, %s, %s)
-                                   """,
-                               (doc_id, -1, entity["start"], entity["end"], entity["label"], entity["text"],
-                                entity["color"]["background"], entity["color"]["border"], entity["color"]["fill"]))
-
-            # 插入 "entity_counts" 数据
-            for item in enti:
-                print(item)
+                    UPDATE enti_types
+                    SET number = %s, color_background = %s, color_border = %s, color_fill = %s
+                    WHERE doc_id = %s AND label = %s
+                """, (
+                    new_number,
+                    item["color"]["background"],
+                    item["color"]["border"],
+                    item["color"]["fill"],
+                    doc_id,
+                    item["label"]
+                ))
+            else:  # 如果不存在，则插入新的记录
                 cursor.execute("""
-                                       INSERT INTO enti_types (doc_id,label, number, color_background, color_border, color_fill)
-                                       VALUES (%s,%s, %s, %s, %s, %s)
-                                   """, (
-                    doc_id, item["label"], item["number"], item["color"]["background"], item["color"]["border"],
-                    item["color"]["fill"]))
+                    INSERT INTO enti_types (
+                        doc_id, label, number, color_background, color_border, color_fill
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    doc_id,
+                    item["label"],
+                    item["number"],
+                    item["color"]["background"],
+                    item["color"]["border"],
+                    item["color"]["fill"]
+                ))
+        # 提交事务
+        conn.commit()
 
-            # 提交事务
-            conn.commit()
-
-            # 关闭数据库连接
-            cursor.close()
-            conn.close()
-            # 返回最终的 "enti" 和 "entities"
-            return jsonify({
-                "status": "success",
-                "enti": enti,
-                "entities": entities
-            })
-
-        except Exception as e:
-            return jsonify({
-                "error": "解析标注结果失败。",
-                "details": str(e),
-                "raw_result": result_raw
-            }), 500
+        # 关闭数据库连接
+        cursor.close()
+        conn.close()
+        # 返回最终的结果
+        return jsonify({
+            "status": "success",
+            "enti": enti,  # 实体类别的统计信息（包含更新后的数量）
+            "entities": indexed_entities  # 具体的实体信息列表
+        })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()  # 打印错误日志
         return jsonify({"error": "发生意外错误。", "details": str(e)}), 500
-
 
 @app.route('/analyze_relation', methods=['POST'])
 def analyze_relation():
     try:
-        # 从请求中获取输入数据
-        data = request.get_json()
-        if not data or 'entities' not in data:
-            return jsonify({"error": "无效输入，请提供'entities'字段。"}), 400
-
-        entities = data.get("entities", [])  # 获取现有的实体信息
-        doc_id = data.get("doc_id")
-        relations = []
-        seen_relations = set()  # 用于去重
-        relation_types = {
+        # 定义默认的关系类型
+        default_relation_types = {
             "到达": {"start_label": "人物", "end_label": "地点", "type": "到达", "color": "#92c9d7", "number": 0},
             "父": {"start_label": "人物", "end_label": "人物", "type": "父", "color": "#78583e", "number": 0},
             "属地": {"start_label": "地点", "end_label": "地点", "type": "属地", "color": "#ffa500", "number": 0},
@@ -271,59 +284,44 @@ def analyze_relation():
             "任职": {"start_label": "人物", "end_label": "职官", "type": "任职", "color": "#ff7ccd", "number": 0}
         }
 
-        for i, entity_a in enumerate(entities):
-            for j, entity_b in enumerate(entities):
-                if i != j:  # 避免自环
-                    relation_key = tuple(
-                        sorted((entity_a["id"], entity_b["id"])))  # 用于唯一标识关系
-                    if relation_key in seen_relations:
-                        continue  # 跳过已处理的关系
+        # 从请求中获取输入数据
+        data = request.get_json()
+        if not data or 'doc_content' not in data or 'entities' not in data:
+            return jsonify({"error": "无效输入，请提供'doc_content'和'entities'字段。"}), 400
 
-                    if entity_a["label"] == "人物" and entity_b["label"] == "地点":
-                        relations.append({
-                            "from": entity_a["id"],
-                            "to": entity_b["id"],
-                            "type": "到达",
-                            "color": "#92c9d7"
-                        })
-                        relation_types["到达"]["number"] += 1
-                        seen_relations.add(relation_key)
-                    elif entity_a["label"] == "人物" and entity_b["label"] == "人物":
-                        relations.append({
-                            "from": entity_a["id"],
-                            "to": entity_b["id"],
-                            "type": "父",
-                            "color": "#78583e"
-                        })
-                        relation_types["父"]["number"] += 1
-                        seen_relations.add(relation_key)
-                    elif entity_a["label"] == "地点" and entity_b["label"] == "地点":
-                        relations.append({
-                            "from": entity_a["id"],
-                            "to": entity_b["id"],
-                            "type": "属地",
-                            "color": "#ffa500"
-                        })
-                        relation_types["属地"]["number"] += 1
-                        seen_relations.add(relation_key)
-                    elif entity_a["label"] == "人物" and entity_b["label"] == "书籍":
-                        relations.append({
-                            "from": entity_a["id"],
-                            "to": entity_b["id"],
-                            "type": "作者",
-                            "color": "#7cb6ff"
-                        })
-                        relation_types["作者"]["number"] += 1
-                        seen_relations.add(relation_key)
-                    elif entity_a["label"] == "人物" and entity_b["label"] == "职官":
-                        relations.append({
-                            "from": entity_a["id"],
-                            "to": entity_b["id"],
-                            "type": "任职",
-                            "color": "#ff7ccd"
-                        })
-                        relation_types["任职"]["number"] += 1
-                        seen_relations.add(relation_key)
+        doc_id = data.get("doc_id")
+        doc_content = data["doc_content"]
+        entities = data["entities"]
+
+        # 获取 relation_types 数据（如果没有提供，则使用默认的关系类型）
+        if 'relation_types' in data and data["relation_types"]:
+            relation_types = {rel["type"]: rel for rel in data["relation_types"]}
+        else:
+            relation_types = default_relation_types
+
+        # 使用 DeepSeek API 提取关系
+        model_relations = extract_relations_with_deepseek(doc_content, entities, list(relation_types.keys()))
+        print("DeepSeek提取的关系：", model_relations)
+
+        # 本地计算关系数量并去重
+        relations = []
+        seen_relations = set()  # 用于去重
+        for relation in model_relations:
+            from_id = relation["from"]
+            to_id = relation["to"]
+            relation_type = relation["type"]
+            relation_key = tuple(sorted((from_id, to_id)))
+
+            if relation_key not in seen_relations:
+                # 为关系附加颜色属性
+                if relation_type in relation_types:
+                    relation["color"] = relation_types[relation_type]["color"]
+                else:
+                    relation["color"] = "#000000"  # 默认颜色，防止 relation_types 中缺少该类型
+
+                relations.append(relation)
+                relation_types[relation_type]["number"] += 1
+                seen_relations.add(relation_key)
 
         # 构建 relation_types 的输出格式
         relation_types_output = [
@@ -336,28 +334,41 @@ def analyze_relation():
             }
             for value in relation_types.values()
         ]
+
         # 插入数据到数据库
-        import time
-        time.sleep(2)
         try:
             connection = get_db_connection()
             cursor = connection.cursor()
 
-            # 插入 relation_types 数据
+            # 插入 relation_types 数据（如果存在则更新，否则插入）
             for relation_type in relation_types_output:
-                cursor.execute(
-                    "INSERT INTO relation_types (doc_id,type, start_label, end_label, color, number) VALUES (%s,%s, %s, %s, %s, %s)",
-                    (doc_id, relation_type["type"], relation_type["start_label"], relation_type["end_label"],
-                     relation_type["color"], relation_type["number"])
-                )
+                cursor.execute("""
+                    SELECT number FROM relation_types WHERE doc_id = %s AND type = %s
+                """, (doc_id, relation_type["type"]))
+                result = cursor.fetchone()
+                if result:
+                    # 更新 number
+                    new_number = result[0] + relation_type["number"]
+                    cursor.execute("""
+                        UPDATE relation_types
+                        SET number = %s, start_label = %s, end_label = %s, color = %s
+                        WHERE doc_id = %s AND type = %s
+                    """, (new_number, relation_type["start_label"], relation_type["end_label"],
+                          relation_type["color"], doc_id, relation_type["type"]))
+                else:
+                    # 插入新记录
+                    cursor.execute("""
+                        INSERT INTO relation_types (doc_id, type, start_label, end_label, color, number)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (doc_id, relation_type["type"], relation_type["start_label"],
+                          relation_type["end_label"], relation_type["color"], relation_type["number"]))
 
             # 插入 relations 数据
             for relation in relations:
-                cursor.execute(
-                    "INSERT INTO relations (doc_id,from_entity_id, to_entity_id, type, color) VALUES (%s,%s, %s, %s, %s)",
-                    (doc_id, relation["from"], relation["to"],
-                     relation["type"], relation["color"])
-                )
+                cursor.execute("""
+                    INSERT INTO relations (doc_id, from_entity_id, to_entity_id, type, color)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (doc_id, relation["from"], relation["to"], relation["type"], relation["color"]))
 
             connection.commit()
 
@@ -369,14 +380,58 @@ def analyze_relation():
                 cursor.close()
                 connection.close()
 
+        # 返回提取的关系和关系类型统计
         return jsonify({
             "relations": relations,
             "relation_types": relation_types_output
         })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()  # 打印完整的错误日志
         return jsonify({"error": "发生意外错误。", "details": str(e)}), 500
 
+
+def extract_relations_with_deepseek(doc_content, entities, relation_types):
+    """
+    使用 DeepSeek API 提取关系。
+    :param doc_content: 文档内容
+    :param entities: 实体信息
+    :param relation_types: 关系类型
+    :return: 提取的关系列表
+    """
+    # 构造 DeepSeek 的输入
+    prompt = f"""
+    文档内容：{doc_content}
+    实体信息：{entities}
+
+    请提取以下类型的关系：{relation_types}。
+    输出格式为 JSON，包含 from (实体ID), to (实体ID), type (关系类型)。不能带markdown格式！
+    示例：
+    [
+        {{"from": 1, "to": 2, "type": "到达"}}
+    ]
+    """
+
+    # 调用 OpenAI 客户端
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "You are an advanced relation extraction assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            stream=False,
+            max_tokens=4000,  # 限制返回内容的长度
+
+        )
+        response_content = response.choices[0].message.content
+        print("DeepSeek 返回的关系：", response_content)
+        # 解析大模型返回的 JSON 数据
+        relations = json.loads(response_content)
+        return relations
+    except Exception as e:
+        raise ValueError(f"调用 DeepSeek API 失败：{e}")
 
 @app.route('/api/add_user', methods=['POST'])
 def add_user():
@@ -1452,6 +1507,48 @@ def add_relation():
              number,
              color,
              doc_id))
+
+        # 提交事务
+        conn.commit()
+
+        return jsonify({'status': 'success', 'message': '关系类新增成功',
+                       'relation_id': cursor.lastrowid})
+
+    except mysql.connector.Error as err:
+        print(f"数据库错误: {err}")
+        return jsonify({'status': 'error', 'message': '数据库操作失败'}), 500
+
+    except Exception as e:
+        print(f"服务器错误: {e}")
+        return jsonify({'status': 'error', 'message': '服务器内部错误'}), 500
+
+@app.route('/add_enti', methods=['POST'])
+def add_enti():
+    try:
+        # 获取前端传递的 JSON 数据
+        data = request.json
+        doc_id = data.get('doc_id')
+        label = data.get('label')
+        number = 0
+        color = data.get('color')
+        color_background = color['background']
+        color_border = color['border']
+        color_fill = color['fill']
+
+        # 参数校验
+        if not all([doc_id, label, color_background,color_border,color_fill]):
+            return jsonify({'status': 'error', 'message': '缺少必要参数'}), 400
+
+        # 连接到 MySQL 数据库
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 插入关系类数据
+        insert_query = """
+        INSERT INTO enti_types (doc_id, label, number, color_background,color_border,color_fill)
+        VALUES (%s, %s, %s, %s, %s,%s)
+        """
+        cursor.execute(insert_query,(doc_id,label,number,color_background,color_border,color_fill))
 
         # 提交事务
         conn.commit()

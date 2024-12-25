@@ -588,6 +588,7 @@ export default {
           doc_id: this.docId,
           doc_content: this.data.doc_content,
           entities: this.data.entities,
+          relation_types: this.data.relation_types,
         })
       } catch (error) {
         console.error(error)

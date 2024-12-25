@@ -148,6 +148,7 @@ const handleAutoPunctuation = async () => {
 
     // 更新文本内容
     content.value = data.choices[0].message.content
+    saveToBackend(content.value, structureTree)
 
     ElMessage.success('自动标点完成')
   } catch (error) {
