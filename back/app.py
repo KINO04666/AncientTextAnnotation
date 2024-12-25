@@ -1,11 +1,11 @@
 from functools import wraps
-
+import re
 from flask import Flask, request, jsonify
 import mysql.connector
 from flask_cors import CORS
 from mysql.connector import Error
 from datetime import datetime, timedelta
-
+import requests
 from numpy import number
 from werkzeug.security import check_password_hash, generate_password_hash
 import jwt
@@ -14,8 +14,14 @@ import jwt
 SECRET_KEY = "4c7a3b9e3f2d4f7a6c8e5b7d1a2f0c9e9b4e2a3f1d2c3b4d1f5a7c3d4e2f1b6"  # 替换为你自己的密钥
 app = Flask(__name__)
 CORS(app)
+# 替换为你的 GLM-4 API 端点和 API 密钥
+GLM_API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+API_KEY = "fb56a2aa29bb55c4e28ababb5019b82d.i7iQ1tELFxeNjmEP"
+
+
 def token_required(f):
     """装饰器：验证 Token 并提取用户信息"""
+
     @wraps(f)
     def decorated(*args, **kwargs):
         # 从请求头中获取 Authorization 字段
@@ -35,7 +41,10 @@ def token_required(f):
             return jsonify({"error": "Invalid token"}), 401
 
         return f(*args, **kwargs)  # 执行实际的路由逻辑
+
     return decorated
+
+
 def get_db_connection():
     connection = mysql.connector.connect(
         host='mysql.sqlpub.com',
@@ -46,7 +55,9 @@ def get_db_connection():
         charset='utf8mb4'  # 确保连接使用 utf8mb4 字符集
     )
     return connection
-def decode_jwt(token):#用来解密jwt
+
+
+def decode_jwt(token):  # 用来解密jwt
     try:
         # 解密并验证 Token
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
@@ -58,6 +69,314 @@ def decode_jwt(token):#用来解密jwt
     except jwt.InvalidTokenError:
         print("无效的 Token")
         return None
+
+
+@app.route('/analyze_entity', methods=['POST'])
+def analyze_text():
+    try:
+        # 从请求中获取输入数据
+        data = request.get_json()
+        if not data or 'doc_content' not in data:
+            return jsonify({"error": "无效输入，请提供'doc_content'字段。"}), 400
+        doc_id = data['doc_id']
+        text = data['doc_content']  # 获取输入的文档内容
+
+        # 简化后的系统提示：提取每个实体类别及其数量
+        system_prompt = (
+            "请从以下文本中提取实体，类别包括：\n"
+            "  1. 人物\n"
+            "  2. 时间\n"
+            "  3. 地点\n"
+            "  4. 职官\n"
+            "  5. 书籍\n"
+            "输出格式：\n"
+            "返回实体的详细信息（包括id, start, end, label, text, color）。"
+        )
+
+        # 调用 GLM-4 API
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "glm-4-plus",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text}
+            ],
+            "max_tokens": 4096,
+            "temperature": 0.7
+        }
+
+        response = requests.post(GLM_API_URL, json=payload, headers=headers)
+
+        if response.status_code != 200:
+            return jsonify({"error": "调用 GLM-4 API 失败", "status_code": response.status_code,
+                            "response_text": response.text}), 500
+
+        # 获取 GLM 返回的数据
+        model_response = response.json()
+        choices = model_response.get("choices", [])
+        if not choices:
+            return jsonify(
+                {"error": "未收到有效响应。", "response_text": response.text}), 500
+
+        # 提取返回内容
+        result_raw = choices[0].get("message", {}).get("content", "")
+
+        # 如果返回是文本格式，解析它
+        try:
+            entities = []
+
+            # 提取实体详细信息
+            entity_details = re.findall(
+                r'"id": (\d+),\s*"start": (\d+),\s*"end": (\d+),\s*"label": "(.*?)",\s*"text": "(.*?)",\s*"color": "(.*?)"',
+                result_raw)
+            for entity in entity_details:
+                entity_id, start, end, label, text, color = entity
+
+                # 定义每种实体类别的颜色
+                color_map = {
+                    "人物": {
+                        "background": "#32d996",
+                        "border": "#007532",
+                        "fill": "#007532"
+                    },
+                    "时间": {
+                        "background": "#7cffc7",
+                        "border": "#18b95d",
+                        "fill": "#18b95d"
+                    },
+                    "地点": {
+                        "background": "#ffff7c",
+                        "border": "#9fb918",
+                        "fill": "#9fb918"
+                    },
+                    "职官": {
+                        "background": "#ff7ccd",
+                        "border": "#b9185d",
+                        "fill": "#b9185d"
+                    },
+                    "书籍": {
+                        "background": "#7cb6ff",
+                        "border": "#185db9",
+                        "fill": "#185db9"
+                    }
+                }
+
+                # 如果实体类别在 color_map 中存在，使用预定义的颜色
+                entity_color = color_map.get(label, {
+                    "background": "#ffffff",
+                    "border": "#000000",
+                    "fill": "#000000"
+                })
+
+                entities.append({
+                    "id": int(entity_id),
+                    "start": int(start),
+                    "end": int(end),
+                    "label": label,
+                    "text": text,
+                    "color": entity_color
+                })
+
+            # 手动统计实体的数量，并构建 "enti" 数据
+            entity_counts = {"人物": 0, "时间": 0, "地点": 0, "职官": 0, "书籍": 0}
+
+            # 遍历所有的实体，统计每种类别的数量
+            for entity in entities:
+                label = entity["label"]
+
+                if label in entity_counts:
+                    entity_counts[label] += 1
+
+            # 构建 "enti" 数据，包含每个类别的数量
+            enti = []
+            for label, count in entity_counts.items():
+                enti.append({
+                    "label": label,
+                    "number": count,
+                    "color": color_map.get(label, {
+                        "background": "#ffffff",
+                        "border": "#000000",
+                        "fill": "#000000"
+                    }),
+                    "disabled": 0
+                })
+            # 保存数据到 MySQL 数据库
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # 插入 "entities" 数据
+            for entity in entities:
+                print(entity)
+                cursor.execute("""
+                                       INSERT INTO entities ( doc_id,original_id,start_pos, end_pos, label, text, color_background, color_border, color_fill)
+                                       VALUES (%s, %s,%s, %s, %s, %s, %s, %s, %s)
+                                   """,
+                               (doc_id, -1, entity["start"], entity["end"], entity["label"], entity["text"],
+                                entity["color"]["background"], entity["color"]["border"], entity["color"]["fill"]))
+
+            # 插入 "entity_counts" 数据
+            for item in enti:
+                print(item)
+                cursor.execute("""
+                                       INSERT INTO enti_types (doc_id,label, number, color_background, color_border, color_fill)
+                                       VALUES (%s,%s, %s, %s, %s, %s)
+                                   """, (
+                    doc_id, item["label"], item["number"], item["color"]["background"], item["color"]["border"],
+                    item["color"]["fill"]))
+
+            # 提交事务
+            conn.commit()
+
+            # 关闭数据库连接
+            cursor.close()
+            conn.close()
+            # 返回最终的 "enti" 和 "entities"
+            return jsonify({
+                "status": "success",
+                "enti": enti,
+                "entities": entities
+            })
+
+        except Exception as e:
+            return jsonify({
+                "error": "解析标注结果失败。",
+                "details": str(e),
+                "raw_result": result_raw
+            }), 500
+
+    except Exception as e:
+        return jsonify({"error": "发生意外错误。", "details": str(e)}), 500
+
+
+@app.route('/analyze_relation', methods=['POST'])
+def analyze_relation():
+    try:
+        # 从请求中获取输入数据
+        data = request.get_json()
+        if not data or 'entities' not in data:
+            return jsonify({"error": "无效输入，请提供'entities'字段。"}), 400
+
+        entities = data.get("entities", [])  # 获取现有的实体信息
+        doc_id = data.get("doc_id")
+        relations = []
+        seen_relations = set()  # 用于去重
+        relation_types = {
+            "到达": {"start_label": "人物", "end_label": "地点", "type": "到达", "color": "#92c9d7", "number": 0},
+            "父": {"start_label": "人物", "end_label": "人物", "type": "父", "color": "#78583e", "number": 0},
+            "属地": {"start_label": "地点", "end_label": "地点", "type": "属地", "color": "#ffa500", "number": 0},
+            "作者": {"start_label": "人物", "end_label": "书籍", "type": "作者", "color": "#7cb6ff", "number": 0},
+            "任职": {"start_label": "人物", "end_label": "职官", "type": "任职", "color": "#ff7ccd", "number": 0}
+        }
+
+        for i, entity_a in enumerate(entities):
+            for j, entity_b in enumerate(entities):
+                if i != j:  # 避免自环
+                    relation_key = tuple(
+                        sorted((entity_a["id"], entity_b["id"])))  # 用于唯一标识关系
+                    if relation_key in seen_relations:
+                        continue  # 跳过已处理的关系
+
+                    if entity_a["label"] == "人物" and entity_b["label"] == "地点":
+                        relations.append({
+                            "from": entity_a["id"],
+                            "to": entity_b["id"],
+                            "type": "到达",
+                            "color": "#92c9d7"
+                        })
+                        relation_types["到达"]["number"] += 1
+                        seen_relations.add(relation_key)
+                    elif entity_a["label"] == "人物" and entity_b["label"] == "人物":
+                        relations.append({
+                            "from": entity_a["id"],
+                            "to": entity_b["id"],
+                            "type": "父",
+                            "color": "#78583e"
+                        })
+                        relation_types["父"]["number"] += 1
+                        seen_relations.add(relation_key)
+                    elif entity_a["label"] == "地点" and entity_b["label"] == "地点":
+                        relations.append({
+                            "from": entity_a["id"],
+                            "to": entity_b["id"],
+                            "type": "属地",
+                            "color": "#ffa500"
+                        })
+                        relation_types["属地"]["number"] += 1
+                        seen_relations.add(relation_key)
+                    elif entity_a["label"] == "人物" and entity_b["label"] == "书籍":
+                        relations.append({
+                            "from": entity_a["id"],
+                            "to": entity_b["id"],
+                            "type": "作者",
+                            "color": "#7cb6ff"
+                        })
+                        relation_types["作者"]["number"] += 1
+                        seen_relations.add(relation_key)
+                    elif entity_a["label"] == "人物" and entity_b["label"] == "职官":
+                        relations.append({
+                            "from": entity_a["id"],
+                            "to": entity_b["id"],
+                            "type": "任职",
+                            "color": "#ff7ccd"
+                        })
+                        relation_types["任职"]["number"] += 1
+                        seen_relations.add(relation_key)
+
+        # 构建 relation_types 的输出格式
+        relation_types_output = [
+            {
+                "type": value["type"],
+                "start_label": value["start_label"],
+                "end_label": value["end_label"],
+                "color": value["color"],
+                "number": value["number"]
+            }
+            for value in relation_types.values()
+        ]
+        # 插入数据到数据库
+        import time
+        time.sleep(2)
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+
+            # 插入 relation_types 数据
+            for relation_type in relation_types_output:
+                cursor.execute(
+                    "INSERT INTO relation_types (doc_id,type, start_label, end_label, color, number) VALUES (%s,%s, %s, %s, %s, %s)",
+                    (doc_id, relation_type["type"], relation_type["start_label"], relation_type["end_label"],
+                     relation_type["color"], relation_type["number"])
+                )
+
+            # 插入 relations 数据
+            for relation in relations:
+                cursor.execute(
+                    "INSERT INTO relations (doc_id,from_entity_id, to_entity_id, type, color) VALUES (%s,%s, %s, %s, %s)",
+                    (doc_id, relation["from"], relation["to"],
+                     relation["type"], relation["color"])
+                )
+
+            connection.commit()
+
+        except mysql.connector.Error as err:
+            return jsonify({"error": "数据库插入错误。", "details": str(err)})
+
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+
+        return jsonify({
+            "relations": relations,
+            "relation_types": relation_types_output
+        })
+
+    except Exception as e:
+        return jsonify({"error": "发生意外错误。", "details": str(e)}), 500
+
 
 @app.route('/api/add_user', methods=['POST'])
 def add_user():
@@ -78,7 +397,8 @@ def add_user():
         cursor = connection.cursor(dictionary=True)
 
         # 检查邮箱是否存在
-        cursor.execute('SELECT user_id FROM user WHERE user_email = %s', (user_email,))
+        cursor.execute(
+            'SELECT user_id FROM user WHERE user_email = %s', (user_email,))
         existing_user = cursor.fetchone()
 
         if existing_user:
@@ -158,6 +478,7 @@ def user_login():
         cursor.close()
         connection.close()
 
+
 # @app.route('/api/getUserid', methods=['GET'])
 # def get_userid():
 #     user_email = request.args.get('user_email')
@@ -190,7 +511,6 @@ def user_login():
 #         connection.close()
 
 
-
 # 查询用户信息接口
 @app.route('/api/get_users', methods=['GET'])
 def get_users():
@@ -211,7 +531,7 @@ def create_project():
     user_id = decode_jwt(data.get('user_id'))
     project_name = data.get('project_name')
     project_describe = data.get('project_describe')
-    #print(user_id, project_name, project_describe)
+    # print(user_id, project_name, project_describe)
     if not user_id or not project_name:
         return jsonify({'status': 'error', 'message': '请提供完整的项目参数'}), 400
 
@@ -222,7 +542,7 @@ def create_project():
     cursor = connection.cursor()
 
     # 插入新项目，project_id 字段不需要传入，数据库会自动生成
-    query = """INSERT INTO project (user_id, project_name, project_describe, project_create, project_modify)  
+    query = """INSERT INTO project (user_id, project_name, project_describe, project_create, project_modify)
                VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"""
     try:
         cursor.execute(query, (user_id, project_name, project_describe))
@@ -231,13 +551,15 @@ def create_project():
         # 获取新插入的项目的 project_id
         project_id = cursor.lastrowid  # 获取刚插入记录的ID
 
-        return jsonify({'status': 'success', 'message': '项目创建成功', 'project_id': project_id}), 201
+        return jsonify({'status': 'success', 'message': '项目创建成功',
+                       'project_id': project_id}), 201
     except Error as e:
         print(f"插入错误: {e}")
         return jsonify({'status': 'error', 'message': '项目创建失败'}), 500
     finally:
         cursor.close()
         connection.close()
+
 
 # 获取用户项目信息接口
 @app.route('/api/getProject', methods=['GET'])
@@ -284,10 +606,14 @@ def delete_project():
     # 删除项目
     query = "DELETE FROM project WHERE project_id = %s"
     try:
-        cursor.execute("SELECT * FROM project WHERE project_id = %s AND user_id = %s", (project_id,user_id))
+        cursor.execute(
+            "SELECT * FROM project WHERE project_id = %s AND user_id = %s",
+            (project_id,
+             user_id))
         project = cursor.fetchall()
         if not project:
-            return jsonify({"error": "Permission denied or project not found"}), 403
+            return jsonify(
+                {"error": "Permission denied or project not found"}), 403
         cursor.execute(query, (project_id,))
         connection.commit()
 
@@ -320,7 +646,7 @@ def change_project():
     cursor = connection.cursor()
 
     # 更新项目信息
-    query = """UPDATE project   
+    query = """UPDATE project
                SET project_name = %s, project_describe = %s, project_modify = CURRENT_TIMESTAMP
                WHERE project_id = %s"""
     try:
@@ -338,6 +664,7 @@ def change_project():
     finally:
         cursor.close()
         connection.close()
+
 
 # # 新建用户项目文档接口
 # @app.route('/api/createDocument', methods=['POST'])
@@ -454,7 +781,8 @@ def delete_document():
         cursor.close()
         connection.close()
 
-#列举所有文档表
+
+# 列举所有文档表
 @app.route('/projects/<int:project_id>/documents', methods=['GET'])
 def get_documents(project_id):
     auth_header = request.headers.get('Authorization')
@@ -470,10 +798,14 @@ def get_documents(project_id):
     cursor = connection.cursor(dictionary=True)  # 获取游标，返回字典格式结果
     query = "SELECT * FROM document WHERE project_id = %s"
     try:
-        cursor.execute("SELECT * FROM project WHERE project_id = %s AND user_id = %s", (project_id,user_id))
+        cursor.execute(
+            "SELECT * FROM project WHERE project_id = %s AND user_id = %s",
+            (project_id,
+             user_id))
         project = cursor.fetchall()
         if not project:
-            return jsonify({"error": "Permission denied or project not found"}), 403
+            return jsonify(
+                {"error": "Permission denied or project not found"}), 403
         cursor.execute(query, (project_id,))
         documents = cursor.fetchall()
 
@@ -485,7 +817,8 @@ def get_documents(project_id):
         cursor.close()
         connection.close()
 
-#获取单个文档里的信息（用于验证doc_id）
+
+# 获取单个文档里的信息（用于验证doc_id）
 @app.route('/document/<int:doc_id>', methods=['GET'])
 def get_document_verified(doc_id):
     auth_header = request.headers.get('Authorization')
@@ -500,10 +833,12 @@ def get_document_verified(doc_id):
 
     cursor = connection.cursor(dictionary=True)  # 获取游标，返回字典格式结果
     try:
-        cursor.execute("SELECT * FROM document WHERE doc_id = %s AND user_id = %s", (doc_id,user_id))
+        cursor.execute(
+            "SELECT * FROM document WHERE doc_id = %s AND user_id = %s", (doc_id, user_id))
         document = cursor.fetchall()
         if not document:
-            return jsonify({"error": "Permission denied or document not found"}), 403
+            return jsonify(
+                {"error": "Permission denied or document not found"}), 403
         return jsonify("Successfully!")
     except Error as e:
         print(f"查询文档失败: {e}")
@@ -513,7 +848,59 @@ def get_document_verified(doc_id):
         connection.close()
 
 
-#上传文档
+# 更新文档的 API
+@app.route('/update_document', methods=['POST'])
+def update_document():
+    try:
+        # 获取请求的 JSON 数据
+        data = request.get_json()
+        # 从请求中获取 doc_id 和新的 doc_content
+        doc_id = data.get('doc_id')
+        new_content = data.get('doc_content')
+
+        # 检查参数是否有效
+        if not doc_id:
+            return jsonify({"error": "doc_id is required"}), 400
+        if not new_content:
+            return jsonify({"error": "doc_content is required"}), 400
+
+        # 创建数据库连接
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # 查询文档是否存在
+        check_query = "SELECT * FROM document WHERE doc_id = %s"
+        cursor.execute(check_query, (doc_id,))
+        document = cursor.fetchone()
+
+        if not document:
+            return jsonify({"error": "Document not found"}), 404
+
+        # 更新文档内容
+        update_query = "UPDATE document SET doc_content = %s WHERE doc_id = %s"
+        cursor.execute(update_query, (new_content, doc_id))
+        connection.commit()
+
+        # 返回更新后的文档
+        document['doc_content'] = new_content
+        return jsonify({
+            "message": "Document updated successfully",
+            "document": document
+        }), 200
+
+    except Error as e:
+        # 捕获数据库连接或查询错误
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        # 确保关闭数据库连接
+        if 'cursor' in locals() and cursor is not None:
+            cursor.close()
+        if 'connection' in locals() and connection is not None and connection.is_connected():
+            connection.close()
+
+
+# 上传文档
 @app.route('/projects/<int:project_id>/documents', methods=['POST'])
 def create_document(project_id):
     data = request.get_json()
@@ -542,11 +929,23 @@ def create_document(project_id):
         VALUES (%s,%s, %s, %s, %s, %s,%s)
     """
     try:
-        cursor.execute("SELECT * FROM project WHERE project_id = %s AND user_id = %s", (project_id,user_id))
+        cursor.execute(
+            "SELECT * FROM project WHERE project_id = %s AND user_id = %s",
+            (project_id,
+             user_id))
         project = cursor.fetchall()
         if not project:
-            return jsonify({"error": "Permission denied or project not found"}), 403
-        cursor.execute(query, (user_id,project_id, doc_name, doc_content, doc_desc,now,now))
+            return jsonify(
+                {"error": "Permission denied or project not found"}), 403
+        cursor.execute(
+            query,
+            (user_id,
+             project_id,
+             doc_name,
+             doc_content,
+             doc_desc,
+             now,
+             now))
         connection.commit()
         new_doc_id = cursor.lastrowid  # 获取刚插入记录的ID
 
@@ -567,6 +966,7 @@ def create_document(project_id):
     finally:
         cursor.close()
         connection.close()
+
 
 # # 修改用户项目文档信息接口
 # @app.route('/api/changeDocument', methods=['PUT'])
@@ -604,7 +1004,7 @@ def create_document(project_id):
 #     finally:
 #         cursor.close()
 #         connection.close()
-#上传关系和实体和实体类 至数据库三个表
+# 上传关系和实体和实体类 至数据库三个表
 @app.route('/upload', methods=['POST'])
 def upload_data():
     entity_id = 0
@@ -634,11 +1034,19 @@ def upload_data():
                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                    """
             now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-            cursor.execute(insert_doc_sql, (user_id, project_id, doc_name, text, doc_describe, now, now))
+            cursor.execute(
+                insert_doc_sql,
+                (user_id,
+                 project_id,
+                 doc_name,
+                 text,
+                 doc_describe,
+                 now,
+                 now))
             conn.commit()
 
         doc_id = data.get('doc_id')
-        if(not doc_id):
+        if (not doc_id):
             doc_id = cursor.lastrowid
         # 插入 entities 数据
         entity_mapping = {}  # 原始 entity id -> 数据库 entity_id
@@ -675,7 +1083,8 @@ def upload_data():
             to_id = rel['to']
             if from_id not in entity_mapping or to_id not in entity_mapping:
                 conn.rollback()
-                return jsonify({"error": f"Relation references undefined entities: from {from_id} to {to_id}"}), 400
+                return jsonify(
+                    {"error": f"Relation references undefined entities: from {from_id} to {to_id}"}), 400
 
             rel_params = (
 
@@ -714,13 +1123,13 @@ def upload_data():
                 """
         for relation_types in data.get('relation_types', []):
             relation_types_params = (
-                    doc_id,
-                    relation_types['type'],
-                    relation_types['start_label'],
-                    relation_types['end_label'],
-                    relation_types['number'],
-                    relation_types['color'],
-                )
+                doc_id,
+                relation_types['type'],
+                relation_types['start_label'],
+                relation_types['end_label'],
+                relation_types['number'],
+                relation_types['color'],
+            )
             cursor.execute(insert_relation_types_sql, relation_types_params)
 
         conn.commit()
@@ -728,7 +1137,8 @@ def upload_data():
         cursor.close()
         conn.close()
 
-        return jsonify({"status": "success", "doc_id": doc_id,"entity_id":entity_id}), 201
+        return jsonify({"status": "success", "doc_id": doc_id,
+                       "entity_id": entity_id}), 201
 
     except mysql.connector.Error as err:
         if conn.is_connected():
@@ -738,10 +1148,11 @@ def upload_data():
         if conn.is_connected():
             conn.rollback()
         return jsonify({"error": str(ex)}), 400
-#获取实体表，关系表和实体类表
+
+
+# 获取实体表，关系表和实体类表
 @app.route('/get/<int:doc_id>', methods=['GET'])
 def get_document(doc_id):
-
     try:
         conn = get_db_connection()
         if conn is None:
@@ -766,7 +1177,8 @@ def get_document(doc_id):
         cursor.execute("SELECT * FROM enti_types WHERE doc_id = %s", (doc_id,))
         enti_types = cursor.fetchall()
         # 获取 relation_types 数据
-        cursor.execute("SELECT * FROM relation_types WHERE doc_id = %s", (doc_id,))
+        cursor.execute(
+            "SELECT * FROM relation_types WHERE doc_id = %s", (doc_id,))
         relation_types = cursor.fetchall()
         # 关闭连接
         cursor.close()
@@ -784,7 +1196,7 @@ def get_document(doc_id):
             "entities": [],
             "relations": [],
             "enti": [],
-            "relation_types":[]
+            "relation_types": []
         }
 
         # 构建 entities
@@ -806,7 +1218,7 @@ def get_document(doc_id):
         # 构建 relations
         for rel in relations:
             rel_data = {
-                "id":rel['relation_id'],
+                "id": rel['relation_id'],
                 "from": rel['from_entity_id'],
                 "to": rel['to_entity_id'],
                 "type": rel['type'],
@@ -828,13 +1240,13 @@ def get_document(doc_id):
             }
             response["enti"].append(enti_data)
         for relation in relation_types:
-            relation_data={
+            relation_data = {
                 "id": relation['id'],
                 "type": relation['type'],
                 "start_label": relation['start_label'],
                 "end_label": relation['end_label'],
-                "number":relation['number'],
-                "color":relation['color']
+                "number": relation['number'],
+                "color": relation['color']
             }
             response["relation_types"].append(relation_data)
         return jsonify(response), 200
@@ -843,6 +1255,7 @@ def get_document(doc_id):
         return jsonify({"error": str(err)}), 500
     except Exception as ex:
         return jsonify({"error": str(ex)}), 400
+
 
 # 删除实体及相关关系的接口
 @app.route('/delete_entity', methods=['POST'])
@@ -860,17 +1273,22 @@ def delete_entity():
         cursor = conn.cursor()
 
         # 查询实体是否存在
-        cursor.execute("SELECT entity_id FROM entities WHERE entity_id = %s AND doc_id=%s", (entity_id,doc_id))
+        cursor.execute(
+            "SELECT entity_id FROM entities WHERE entity_id = %s AND doc_id=%s",
+            (entity_id,
+             doc_id))
         entity = cursor.fetchone()
 
         if not entity:
             return jsonify({'status': 'error', 'message': '实体不存在'}), 404
 
         # 删除与该实体相关的关系
-        cursor.execute("DELETE FROM relations WHERE `from_entity_id` = %s OR `to_entity_id` = %s", (entity_id, entity_id))
+        cursor.execute("DELETE FROM relations WHERE `from_entity_id` = %s OR `to_entity_id` = %s",
+                       (entity_id, entity_id))
 
         # 删除实体
-        cursor.execute("DELETE FROM entities WHERE entity_id = %s", (entity_id,))
+        cursor.execute(
+            "DELETE FROM entities WHERE entity_id = %s", (entity_id,))
 
         # 提交更改
         conn.commit()
@@ -906,7 +1324,7 @@ def update_enti():
 
         # 更新实体
         update_query = "UPDATE enti_types SET number = %s WHERE doc_id = %s AND label = %s"
-        cursor.execute(update_query, ( new_number, doc_id,label,))
+        cursor.execute(update_query, (new_number, doc_id, label,))
 
         # 提交更改
         conn.commit()
@@ -915,7 +1333,8 @@ def update_enti():
         if cursor.rowcount == 0:
             return jsonify({'status': 'error', 'message': '实体不存在或未更新'}), 404
 
-        return jsonify({'status': 'success', 'message': '实体更新成功', 'updated_id': doc_id})
+        return jsonify(
+            {'status': 'success', 'message': '实体更新成功', 'updated_id': doc_id})
 
     except mysql.connector.Error as err:
         print(f"数据库错误: {err}")
@@ -924,6 +1343,7 @@ def update_enti():
     except Exception as e:
         print(f"服务器错误: {e}")
         return jsonify({'status': 'error', 'message': '服务器内部错误'}), 500
+
 
 @app.route('/delete_enti', methods=['DELETE'])
 def delete_enti():
@@ -934,39 +1354,45 @@ def delete_enti():
         label = data.get('label')  # 实体类的 label
 
         if not label or not doc_id:
-            return jsonify({'status': 'error', 'message': 'doc_id 和 label 是必填项'}), 400
+            return jsonify(
+                {'status': 'error', 'message': 'doc_id 和 label 是必填项'}), 400
 
         # 连接到 MySQL 数据库
         conn = get_db_connection()
         cursor = conn.cursor()
 
         # 查询符合条件的 entity_id
-        cursor.execute("SELECT entity_id FROM entities WHERE label = %s AND doc_id = %s", (label, doc_id))
-        entity_ids = cursor.fetchall()  # 获取所有符合条件的 entity_id
-
-        # 如果没有找到实体，则返回错误
-        if not entity_ids:
-            return jsonify({'status': 'error', 'message': '未找到对应的实体'}), 404
-        # 删除关系表中与这些 entity_id 相关的记录
-        entity_ids = [row[0] for row in entity_ids]  # 提取所有 entity_id
         cursor.execute(
-            "DELETE FROM relations WHERE from_entity_id IN (%s) OR to_entity_id IN (%s)" % (
-                ', '.join(['%s'] * len(entity_ids)), ', '.join(['%s'] * len(entity_ids))
-            ),
-            entity_ids + entity_ids  # 双份的 entity_ids，用于 from_entity_id 和 to_entity_id
-        )
+            "SELECT entity_id FROM entities WHERE label = %s AND doc_id = %s",
+            (label,
+             doc_id))
+        entity_ids = cursor.fetchall()  # 获取所有符合条件的 entity_id
+        print(entity_ids)
+        if entity_ids:
+            # 删除关系表中与这些 entity_id 相关的记录
+            entity_ids = [row[0] for row in entity_ids]  # 提取所有 entity_id
+            cursor.execute(
+                "DELETE FROM relations WHERE from_entity_id IN (%s) OR to_entity_id IN (%s)" % (
+                    ', '.join(['%s'] * len(entity_ids)
+                              ), ', '.join(['%s'] * len(entity_ids))
+                ),
+                entity_ids + entity_ids  # 双份的 entity_ids，用于 from_entity_id 和 to_entity_id
+            )
         relations_deleted_count = cursor.rowcount
         # 删除实体类
-        cursor.execute("DELETE FROM enti_types WHERE label = %s AND doc_id = %s", (label, doc_id))
+        cursor.execute(
+            "DELETE FROM enti_types WHERE label = %s AND doc_id = %s", (label, doc_id))
         enti_deleted_count = cursor.rowcount
 
         # 删除实体表中具有相同 label 的实体
-        cursor.execute("DELETE FROM entities WHERE label = %s AND doc_id = %s", (label, doc_id))
+        cursor.execute(
+            "DELETE FROM entities WHERE label = %s AND doc_id = %s", (label, doc_id))
         entities_deleted_count = cursor.rowcount
 
         # 删除 relation_types 表中 start_label 和 end_label 都不能等于 label 的记录
         cursor.execute(
-            "DELETE FROM relation_types WHERE start_label = %s OR end_label = %s", (label, label)
+            "DELETE FROM relation_types WHERE start_label = %s OR end_label = %s", (
+                label, label)
         )
         relation_types_deleted_count = cursor.rowcount
 
@@ -980,7 +1406,7 @@ def delete_enti():
                 'entity_classes_deleted': enti_deleted_count,
                 'entities_deleted': entities_deleted_count,
                 'relations_deleted': relations_deleted_count,
-                'relation_types_deleted':relation_types_deleted_count
+                'relation_types_deleted': relation_types_deleted_count
             }
         })
 
@@ -992,6 +1418,7 @@ def delete_enti():
         print(f"服务器错误: {e}")
         return jsonify({'status': 'error', 'message': '服务器内部错误'}), 500
 
+
 @app.route('/add_relation', methods=['POST'])
 def add_relation():
     try:
@@ -999,10 +1426,10 @@ def add_relation():
         data = request.json
         doc_id = data.get('doc_id')
         start_label = data.get('start_label')  # 起始实体标签
-        end_label = data.get('end_label')      # 目标实体标签
-        type = data.get('type')       # 关系类型
-        number = data.get('number', 0)         # 关系数量，默认为 0
-        color = data.get('color')              # 关系颜色
+        end_label = data.get('end_label')  # 目标实体标签
+        type = data.get('type')  # 关系类型
+        number = data.get('number', 0)  # 关系数量，默认为 0
+        color = data.get('color')  # 关系颜色
 
         # 参数校验
         if not all([start_label, end_label, type, color]):
@@ -1017,12 +1444,20 @@ def add_relation():
         INSERT INTO relation_types (start_label, end_label, type, number, color,doc_id)
         VALUES (%s, %s, %s, %s, %s,%s)
         """
-        cursor.execute(insert_query, (start_label, end_label, type, number, color,doc_id))
+        cursor.execute(
+            insert_query,
+            (start_label,
+             end_label,
+             type,
+             number,
+             color,
+             doc_id))
 
         # 提交事务
         conn.commit()
 
-        return jsonify({'status': 'success', 'message': '关系类新增成功', 'relation_id': cursor.lastrowid})
+        return jsonify({'status': 'success', 'message': '关系类新增成功',
+                       'relation_id': cursor.lastrowid})
 
     except mysql.connector.Error as err:
         print(f"数据库错误: {err}")
@@ -1031,6 +1466,8 @@ def add_relation():
     except Exception as e:
         print(f"服务器错误: {e}")
         return jsonify({'status': 'error', 'message': '服务器内部错误'}), 500
+
+
 @app.route('/relations/instances', methods=['POST'])
 def add_instance():
     try:
@@ -1039,8 +1476,8 @@ def add_instance():
         doc_id = data.get('doc_id')
         from_entity_id = data.get('from_entity_id')
         to_entity_id = data.get('to_entity_id')
-        type = data.get('type')       # 关系类型
-        color = data.get('color')              # 关系颜色
+        type = data.get('type')  # 关系类型
+        color = data.get('color')  # 关系颜色
 
         # 参数校验
         if not all([from_entity_id, to_entity_id, type, color]):
@@ -1055,12 +1492,19 @@ def add_instance():
         INSERT INTO relations (from_entity_id, to_entity_id, type, color,doc_id)
         VALUES (%s, %s, %s, %s, %s)
         """
-        cursor.execute(insert_query, (from_entity_id, to_entity_id, type, color,doc_id))
+        cursor.execute(
+            insert_query,
+            (from_entity_id,
+             to_entity_id,
+             type,
+             color,
+             doc_id))
 
         # 提交事务
         conn.commit()
 
-        return jsonify({'status': 'success', 'message': '关系实例新增成功', 'id': cursor.lastrowid})
+        return jsonify(
+            {'status': 'success', 'message': '关系实例新增成功', 'id': cursor.lastrowid})
 
     except mysql.connector.Error as err:
         print(f"数据库错误: {err}")
@@ -1069,6 +1513,8 @@ def add_instance():
     except Exception as e:
         print(f"服务器错误: {e}")
         return jsonify({'status': 'error', 'message': '服务器内部错误'}), 500
+
+
 @app.route('/relations/instances/<int:relation_id>', methods=['DELETE'])
 def delete_relation_instance(relation_id):
     """
@@ -1089,28 +1535,32 @@ def delete_relation_instance(relation_id):
         cursor = conn.cursor(dictionary=True)
 
         # 验证 doc_id 是否存在
-        cursor.execute("SELECT doc_id FROM document WHERE doc_id = %s", (doc_id,))
+        cursor.execute(
+            "SELECT doc_id FROM document WHERE doc_id = %s", (doc_id,))
         existing_doc = cursor.fetchone()
         if not existing_doc:
-            return jsonify({"error": f"Document with id {doc_id} does not exist."}), 404
+            return jsonify(
+                {"error": f"Document with id {doc_id} does not exist."}), 404
 
         # 验证关系实例是否存在且属于指定的文档
         cursor.execute("""
-            SELECT relation_id FROM relations 
+            SELECT relation_id FROM relations
             WHERE relation_id = %s AND doc_id = %s
         """, (relation_id, doc_id))
         relation = cursor.fetchone()
         if not relation:
-            return jsonify({"error": f"Relation with id {relation_id} does not exist in document {doc_id}."}), 404
+            return jsonify(
+                {"error": f"Relation with id {relation_id} does not exist in document {doc_id}."}), 404
 
         # 删除关系实例
         cursor.execute("""
-            DELETE FROM relations 
+            DELETE FROM relations
             WHERE relation_id = %s AND doc_id = %s
         """, (relation_id, doc_id))
         conn.commit()
 
-        return jsonify({"status": "success", "message": f"Relation {relation_id} deleted successfully."}), 200
+        return jsonify(
+            {"status": "success", "message": f"Relation {relation_id} deleted successfully."}), 200
 
     except mysql.connector.Error as err:
         if conn.is_connected():
@@ -1154,11 +1604,11 @@ def delete_relation_kind(doc_id, relation_type):
 
         # 先删除与关系类关联的所有关系实例
         delete_relations_query = "DELETE FROM relations WHERE type = %s AND doc_id=%s"
-        cursor.execute(delete_relations_query, (relation_type,doc_id))
+        cursor.execute(delete_relations_query, (relation_type, doc_id))
 
         # 然后删除关系类
         delete_relation_type_query = "DELETE FROM relation_types WHERE type = %s AND doc_id=%s"
-        cursor.execute(delete_relation_type_query, (relation_type,doc_id))
+        cursor.execute(delete_relation_type_query, (relation_type, doc_id))
 
         # 提交事务
         connection.commit()
@@ -1171,6 +1621,7 @@ def delete_relation_kind(doc_id, relation_type):
 
     except Error as e:
         return {"status": "error", "message": f"删除失败: {str(e)}"}
+
 
 # 更新实体的接口
 @app.route('/update_relation_types', methods=['PUT'])
@@ -1207,7 +1658,8 @@ def update_relation_types():
 
         # 检查受影响的行数
         if cursor.rowcount > 0:
-            return jsonify({'status': 'success', 'message': '更新成功', 'affected_rows': cursor.rowcount}), 200
+            return jsonify({'status': 'success', 'message': '更新成功',
+                           'affected_rows': cursor.rowcount}), 200
         else:
             return jsonify({'status': 'error', 'message': '未找到对应的关系类型'}), 404
 
@@ -1226,5 +1678,6 @@ def update_relation_types():
         if 'conn' in locals() and conn.is_connected():
             conn.close()
 
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0',port=5000,debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
