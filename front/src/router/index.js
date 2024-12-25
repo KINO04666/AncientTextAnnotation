@@ -5,7 +5,6 @@ import Layout_Top from '@/components/Layout_Top.vue'
 import CreateProject from '@/components/CreateProject.vue'
 import DocumentManagement from '@/components/DocumentManagement.vue'
 import CreateDocument from '@/components/CreateDocument.vue'
-import Annotation from '@/components/Annotation.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
 import FileImport from '@/components/FileImport.vue'
@@ -14,6 +13,7 @@ import EntityTagging from '@/components/EntityTagging.vue'
 import RelationshipAnnotation from '@/components/RelationshipAnnotation.vue'
 import RelationGraph from '@/components/RelationGraph.vue'
 import HeaderNav from '@/components/HeaderNav.vue'
+import StructureTagging from '@/components/StructureTagging.vue'
 // import CreateDocument from '@/components/CreateDocument.vue' // 如果有创建文档页面
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -74,11 +74,6 @@ const router = createRouter({
       ],
     },
     {
-      path: '/annotation',
-      name: 'Annotation',
-      component: Annotation,
-    },
-    {
       path: '/import',
       name: 'Import',
       component: FileImport,
@@ -111,6 +106,11 @@ const router = createRouter({
           path: '/relationshipannotation',
           name: 'RelationshipAnnotation',
           component: RelationshipAnnotation,
+        },
+        {
+          path: '/struct',
+          name: 'StructureTagging',
+          component: StructureTagging,
         },
       ],
     },

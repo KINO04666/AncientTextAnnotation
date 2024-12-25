@@ -67,9 +67,14 @@
             <span class="entity-label">{{ entity.label }}</span>
             <div class="color-box" :style="{ backgroundColor: entity.color.background }"></div>
           </button>
-          <button class="automatic" title="自动标注">
+          <button class="automatic" title="自动标注" @click="autoAnnotation">
             <el-icon><MagicStick /></el-icon>
           </button>
+          <!-- 转圈动画 -->
+          <div v-if="loading" class="spinner">
+            <!-- 这是一个简单的加载动画示例 -->
+            <div class="loader"></div>
+          </div>
         </div>
       </div>
       <el-divider />
@@ -96,6 +101,7 @@ export default {
   },
   data() {
     return {
+      loading: false, // 控制加载动画
       new_entity_id: -1,
       data: {
         enti: [],
@@ -116,6 +122,20 @@ export default {
     this.fetchData()
   },
   methods: {
+    async autoAnnotation() {
+      this.loading = true // 开始加载动画
+      try {
+        await api.post('/analyze_entity', {
+          doc_id: this.docId,
+          doc_content: this.data.doc_content,
+        })
+      } catch (error) {
+        console.error(error)
+      } finally {
+        this.loading = false // 结束加载动画
+      }
+      this.fetchData()
+    },
     async openDeleteDialog(index, label) {
       try {
         // 弹出确认框
@@ -686,5 +706,29 @@ export default {
   width: 25px;
   height: 25px;
   border-radius: 10px;
+}
+.spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.loader {
+  border: 4px solid #f3f3f3; /* 边框颜色 */
+  border-top: 4px solid #3498db; /* 动画的颜色 */
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 </style>

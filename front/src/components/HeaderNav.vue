@@ -7,10 +7,7 @@
       </div>
       <ul class="button-list">
         <li>
-          <router-link
-            :to="{ path: '/entitytagging', query: { doc_id: this.doc_id } }"
-            class="button"
-          >
+          <router-link :to="{ path: '/struct', query: { doc_id: this.doc_id } }" class="button">
             <el-icon><Operation /></el-icon>
             <span class="button-text">结构标注</span>
           </router-link>

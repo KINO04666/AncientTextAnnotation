@@ -117,6 +117,10 @@
         <button class="automatic" title="自动标注" @click="automaticAnnotation">
           <el-icon><MagicStick /></el-icon>
         </button>
+        <div v-if="loading" class="spinner">
+          <!-- 这是一个简单的加载动画示例 -->
+          <div class="loader"></div>
+        </div>
       </div>
       <el-divider />
       <Annotation
@@ -202,6 +206,7 @@ export default {
   },
   data() {
     return {
+      loading: false,
       docId: this.$route.query.doc_id,
       data: {
         enti: [], // 实体类别
@@ -576,12 +581,20 @@ export default {
       return relationType ? relationType.color : '#FFFFFF'
     },
     // 自动标注功能（根据您的需求实现）
-    automaticAnnotation() {
-      // 实现自动标注逻辑
-      this.$message({
-        type: 'info',
-        message: '自动标注功能尚未实现。',
-      })
+    async automaticAnnotation() {
+      this.loading = true // 开始加载动画
+      try {
+        await api.post('/analyze_relation', {
+          doc_id: this.docId,
+          doc_content: this.data.doc_content,
+          entities: this.data.entities,
+        })
+      } catch (error) {
+        console.error(error)
+      } finally {
+        this.loading = false // 结束加载动画
+      }
+      this.fetchData()
     },
     // 打开添加关系类对话框
     openAddRelationKindDialog() {
@@ -764,5 +777,29 @@ export default {
 /* 其他样式保持不变 */
 .dialog-footer {
   text-align: right;
+}
+.spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.loader {
+  border: 4px solid #f3f3f3; /* 边框颜色 */
+  border-top: 4px solid #3498db; /* 动画的颜色 */
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 </style>
