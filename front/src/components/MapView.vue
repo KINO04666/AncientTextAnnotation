@@ -16,11 +16,21 @@
 import { onMounted, onUnmounted } from 'vue'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import axios from 'axios'
+<<<<<<< HEAD
 import RelationGraph from './RelationGraph.vue' // 引入网络关系图组件
 
 let map = null
 let markers = []
 
+=======
+import api from '@/axios/axios'
+import RelationGraph from './RelationGraph.vue' // 引入网络关系图组件
+import { useRoute } from 'vue-router'
+import { ref } from 'vue'
+let map = null
+let markers = []
+const route = useRoute()
+>>>>>>> dev
 // 获取地点经纬度并标注
 const getLocationData = async (placeName) => {
   try {
@@ -89,12 +99,16 @@ onMounted(() => {
   AMapLoader.load({
     key: 'f43b5453e7738f22c4ecd6cd8914dbf7',
     version: '2.0',
+<<<<<<< HEAD
     plugins: ['AMap.TileLayer.Satellite'],
+=======
+>>>>>>> dev
   })
     .then((AMap) => {
       map = new AMap.Map('container', {
         zoom: 8,
         center: [116.397428, 39.90923], // 默认中心点
+<<<<<<< HEAD
         viewMode: '3D',
         features: [],
       })
@@ -105,6 +119,16 @@ onMounted(() => {
       // 假设从后端获取到 entities 数据
       axios
         .get('http://127.0.0.1:5000/get/26') // 假设获取文档ID为26的数据
+=======
+        viewMode: '2D',
+        features: ['bg', 'road'],
+        mapStyle: 'amap://styles/blue', //设置地图的显示样式
+      })
+      const doc_id = ref(route.query.doc_id)
+      // 假设从后端获取到 entities 数据
+      api
+        .get(`/get/${doc_id.value}`) // 假设获取文档ID为26的数据
+>>>>>>> dev
         .then((response) => {
           const entities = response.data.entities // 获取 entities 数据
           updateMap(entities) // 更新地图
@@ -129,6 +153,10 @@ onUnmounted(() => {
   width: 100%;
   display: flex;
   background-color: #fff;
+<<<<<<< HEAD
+=======
+  align-content: space-between;
+>>>>>>> dev
 }
 
 /* 左侧：地图区域 */

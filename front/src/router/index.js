@@ -5,7 +5,10 @@ import Layout_Top from '@/components/Layout_Top.vue'
 import CreateProject from '@/components/CreateProject.vue'
 import DocumentManagement from '@/components/DocumentManagement.vue'
 import CreateDocument from '@/components/CreateDocument.vue'
+<<<<<<< HEAD
 import Annotation from '@/components/Annotation.vue'
+=======
+>>>>>>> dev
 import LoginForm from '@/components/LoginForm.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
 import FileImport from '@/components/FileImport.vue'
@@ -13,7 +16,12 @@ import MapView from '@/components/MapView.vue'
 import EntityTagging from '@/components/EntityTagging.vue'
 import RelationshipAnnotation from '@/components/RelationshipAnnotation.vue'
 import RelationGraph from '@/components/RelationGraph.vue'
+<<<<<<< HEAD
 import Menu2 from '@/components/Menu2.vue'
+=======
+import HeaderNav from '@/components/HeaderNav.vue'
+import StructureTagging from '@/components/StructureTagging.vue'
+>>>>>>> dev
 // import CreateDocument from '@/components/CreateDocument.vue' // 如果有创建文档页面
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -74,11 +82,14 @@ const router = createRouter({
       ],
     },
     {
+<<<<<<< HEAD
       path: '/annotation',
       name: 'Annotation',
       component: Annotation,
     },
     {
+=======
+>>>>>>> dev
       path: '/import',
       name: 'Import',
       component: FileImport,
@@ -94,14 +105,20 @@ const router = createRouter({
       component: RelationGraph,
     },
     {
+<<<<<<< HEAD
       path: '/menu2',
       component: Menu2,
+=======
+      path: '/headernav',
+      component: HeaderNav,
+>>>>>>> dev
       children: [
         {
           path: '/map',
           name: 'Map',
           component: MapView,
         },
+<<<<<<< HEAD
       ],
     },
     {
@@ -114,6 +131,25 @@ const router = createRouter({
       name: 'RelationshipAnnotation',
       component: RelationshipAnnotation,
     },
+=======
+        {
+          path: '/entitytagging',
+          name: 'EntityTagging',
+          component: EntityTagging,
+        },
+        {
+          path: '/relationshipannotation',
+          name: 'RelationshipAnnotation',
+          component: RelationshipAnnotation,
+        },
+        {
+          path: '/struct',
+          name: 'StructureTagging',
+          component: StructureTagging,
+        },
+      ],
+    },
+>>>>>>> dev
   ],
 })
 export default router

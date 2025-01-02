@@ -42,7 +42,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+<<<<<<< HEAD
 
+=======
+import api from '@/axios/axios'
+>>>>>>> dev
 export default {
   name: 'RegisterForm',
   setup() {
@@ -63,7 +67,11 @@ export default {
       errorMessage.value = ''
 
       try {
+<<<<<<< HEAD
         const response = await axios.post('http://127.0.0.1:5000/api/add_user', {
+=======
+        const response = await api.post('/api/add_user', {
+>>>>>>> dev
           user_email: email.value,
           user_password: password.value,
         })
@@ -106,6 +114,10 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
+<<<<<<< HEAD
+=======
+  position: fixed;
+>>>>>>> dev
 }
 
 .register-box {

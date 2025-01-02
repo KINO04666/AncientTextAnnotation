@@ -31,7 +31,11 @@
       ref="fileInput"
       multiple
       @change="importFiles"
+<<<<<<< HEAD
       accept=".txt, .docx, .pdf,.xlsx"
+=======
+      accept=".txt, .docx, .pdf,.xlsx,.json"
+>>>>>>> dev
       style="display: none"
     />
   </div>
@@ -39,6 +43,10 @@
 
 <script>
 import axios from 'axios'
+<<<<<<< HEAD
+=======
+import api from '@/axios/axios'
+>>>>>>> dev
 import mammoth from 'mammoth'
 import Cookies from 'js-cookie'
 import * as XLSX from 'xlsx' // 导入 SheetJS
@@ -93,13 +101,27 @@ export default {
       //   ]
       // 使用 Axios 从后端 API 获取文档数据，根据 projectId 过滤
 
+<<<<<<< HEAD
       axios
         .get(`http://127.0.0.1:5000/projects/${this.projectId}/documents`)
+=======
+      api
+        .get(`/projects/${this.projectId}/documents`, {
+          headers: {
+            Authorization: `Bearer ${this.user_id}`,
+          },
+        })
+>>>>>>> dev
         .then((response) => {
           this.documents = response.data
         })
         .catch((error) => {
           console.error('获取文档数据失败:', error)
+<<<<<<< HEAD
+=======
+          alert('此项目不是你的项目！')
+          this.$router.push('/project-management')
+>>>>>>> dev
         })
 
       // 如果使用代理，则可以简化为：
@@ -125,15 +147,24 @@ export default {
       // 示例：跳转到文档详情页
       // this.$router.push({ name: 'DocumentDetail', params: { docId: document.doc_id } })
       // 跳转到创建文档页面
+<<<<<<< HEAD
       this.$router.push(`/entitytagging?doc_id=${document.doc_id}`)
+=======
+      this.$router.push(`/struct?doc_id=${document.doc_id}`)
+>>>>>>> dev
     },
     deleteDocument(document) {
       const confirmDelete = window.confirm('确定要删除该文档吗？')
 
       if (confirmDelete) {
         // 发送DELETE请求
+<<<<<<< HEAD
         axios
           .delete('http://127.0.0.1:5000/api/deleteDocument', {
+=======
+        api
+          .delete('/api/deleteDocument', {
+>>>>>>> dev
             data: { doc_id: document.doc_id }, // 通过data发送JSON数据
           })
           .then((response) => {
@@ -196,6 +227,32 @@ export default {
             file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           ) {
             content = await this.convertXlsxToText(file)
+<<<<<<< HEAD
+=======
+          } else if (file.type === 'application/json') {
+            let content = null
+            content = await this.convertJsonToText(file)
+            console.log(content)
+            const newDocument = {
+              user_id: this.user_id, // 使用 data 中的 user_id
+              project_id: this.projectId,
+              doc_name: content.doc_name,
+              text: content.doc_content,
+              doc_describe: content.doc_describe,
+              entities: content.entities,
+              enti: content.enti,
+              relations: content.relations,
+              relation_types: content.relation_types,
+            }
+            console.log(newDocument)
+            await api.post(`/upload`, newDocument).catch((error) => {
+              console.error(`导入文档失败:`, error)
+            })
+            // 清空文件输入
+            event.target.value = ''
+            this.fetchDocuments()
+            continue
+>>>>>>> dev
           } else {
             content = `不支持的文件类型: ${file.type}`
           }
@@ -213,6 +270,7 @@ export default {
           }
 
           // 发送 POST 请求到后端 API 以保存文档
+<<<<<<< HEAD
           await axios
             .post(`http://127.0.0.1:5000/projects/${this.projectId}/documents`, newDocument)
             .then((response) => {
@@ -222,6 +280,15 @@ export default {
             .catch((error) => {
               console.error(`导入文档 "${docName}" 失败:`, error)
             })
+=======
+          await api
+            .post(`/projects/${this.projectId}/documents`, newDocument)
+
+            .catch((error) => {
+              console.error(`导入文档 "${docName}" 失败:`, error)
+            })
+          this.fetchDocuments()
+>>>>>>> dev
         } catch (error) {
           console.error(`处理文件 "${file.name}" 时出错:`, error)
         }
@@ -230,6 +297,10 @@ export default {
       // 清空文件输入
       event.target.value = ''
     },
+<<<<<<< HEAD
+=======
+
+>>>>>>> dev
     // 读取文件为文本
     readFileAsText(file) {
       return new Promise((resolve, reject) => {
@@ -243,6 +314,30 @@ export default {
         reader.readAsText(file)
       })
     },
+<<<<<<< HEAD
+=======
+    // 将 .json 文件转换为文本
+    convertJsonToText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = async (e) => {
+          try {
+            const jsonString = e.target.result // 读取文件的内容
+            const jsonObject = JSON.parse(jsonString) // 将 JSON 字符串解析为对象
+
+            resolve(jsonObject) // 返回格式化的 JSON 字符串
+          } catch (error) {
+            reject(error) // 如果解析失败，则抛出错误
+          }
+        }
+        reader.onerror = (e) => {
+          reject(e) // 如果读取文件失败，则抛出错误
+        }
+        reader.readAsText(file) // 将 JSON 文件读取为文本
+      })
+    },
+
+>>>>>>> dev
     // 将 .docx 文件转换为文本
     convertDocxToText(file) {
       return new Promise((resolve, reject) => {

@@ -45,7 +45,11 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import Cookies from 'js-cookie'
+<<<<<<< HEAD
 
+=======
+import api from '@/axios/axios'
+>>>>>>> dev
 export default {
   name: 'LoginForm',
   setup() {
@@ -89,7 +93,11 @@ export default {
       errorMessage.value = ''
 
       try {
+<<<<<<< HEAD
         const response = await axios.post('http://127.0.0.1:5000/api/userLogin', {
+=======
+        const response = await api.post('/api/userLogin', {
+>>>>>>> dev
           user_email: email.value,
           user_password: password.value,
         })
@@ -139,6 +147,11 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
+<<<<<<< HEAD
+=======
+
+  position: fixed;
+>>>>>>> dev
 }
 
 .login-box {
