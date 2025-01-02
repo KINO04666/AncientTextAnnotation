@@ -1,5 +1,6 @@
 前端默认登录用户为123456@qq.com 123456
 换了npm源之后可以直接在front里输入npm install安装依赖 并输入npm run dev运行
+如果不想使用云端服务可以将axios文件夹里的api改成本地的
 # API 文档
 本文档简要介绍了该 Flask 应用程序的 API 接口，涵盖用户管理、项目管理及文档管理等功能。认证采用 JSON Web Tokens (JWT)。
 
